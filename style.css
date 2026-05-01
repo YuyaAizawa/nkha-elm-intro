@@ -1,0 +1,93 @@
+:root {
+  --base-color: #4C5CAE;
+  --accent-color: #FE6426;
+  --base-muted-color: #DADEEF;
+  --accent-muted-color: #FEC1A8;
+
+  --border-color: #B5C0C0;
+  --border-radius: 0.3rem;
+}
+
+body {
+  padding: 2em;
+}
+
+.markdown-body {
+  box-sizing: border-box;
+  max-width: 980px;
+  margin: 0 auto;
+  & .anchor {
+    float: none;
+    margin-left: 0;
+    opacity: 0;
+    text-decoration: none;
+    font-size: 0.8em;
+    user-select: none;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    margin: 0;
+    line-height: 1.25;
+  }
+  h1:hover .anchor,
+  h2:hover .anchor,
+  h3:hover .anchor,
+  h4:hover .anchor,
+  h5:hover .anchor,
+  h6:hover .anchor {
+    opacity: 1;
+  }
+
+  h1 {
+    position: relative;
+    padding: 0.6rem 1rem;
+    border-bottom: 4px solid var(--base-muted-color);
+    margin-bottom: 1.4rem;
+  }
+  h1:before {
+    position: absolute;
+    bottom: -4px;
+    left: 0;
+    width: 130px;
+    height: 4px;
+    content: '';
+    background: var(--base-color);
+  }
+
+  h2 {
+    padding: 0.2rem 0.6rem;
+    border-left: 8px solid var(--base-color);
+    border-bottom: none;
+    margin: 0.6rem 0 0.6rem 0;
+  }
+
+  figure {
+    margin: 0;
+    figcaption {
+      font-weight: bold;
+    }
+  }
+
+  section {
+    margin-bottom: 3rem;
+  }
+
+  p {
+    margin-bottom: 1.4rem;
+  }
+
+  .toc {
+    position: fixed;
+    top: 2rem;
+    left: 1rem;
+    width: 200px;
+    font-size: 0.9em;
+  }
+  .toc ul {
+    list-style: none;
+    padding: 0;
+  }
+  .toc li.indent {
+    margin-left: 1em;
+  }
+}

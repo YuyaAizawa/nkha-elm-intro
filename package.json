@@ -1,0 +1,13 @@
+{
+    "type": "module",
+    "dependencies": {
+        "github-markdown-css": "^5.8.1",
+        "rehype-autolink-headings": "^7.1.0",
+        "rehype-stringify": "^10.0.1",
+        "remark-parse": "^11.0.0",
+        "remark-rehype": "^11.1.2",
+        "remark-slug": "^7.0.1",
+        "unified": "^11.0.5",
+        "unist-util-visit": "^5.0.0"
+    }
+}
