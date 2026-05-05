@@ -1,5 +1,6 @@
 import fs from 'fs'
 import remarkParse from 'remark-parse'
+import remarkGfm from 'remark-gfm'
 import remarkSlug from 'remark-slug'
 import remarkRehype from 'remark-rehype'
 import rehypeAutolinkHeadings from 'rehype-autolink-headings'
@@ -9,20 +10,46 @@ import { visit } from 'unist-util-visit'
 
 const markdown = fs.readFileSync('index.md', 'utf8')
 
+function collectText(node) {
+  if (node.type === 'text') {
+    return node.value
+  }
+
+  if (node.type === 'element' && Array.isArray(node.children)) {
+    return node.children
+      .map(collectText)
+      .join('')
+  }
+
+  return ''
+}
+
+function makeId(text) {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+}
+
+function normalizeLocalHref(href) {
+  if (typeof href !== 'string' || !href.startsWith('#')) {
+    return href
+  }
+
+  return `#${makeId(href.slice(1))}`
+}
+
+
+
 function extractHeadings(options = {}) {
   const { store = [] } = options
 
   return (tree) => {
     visit(tree, 'heading', (node) => {
     const text = node.children
-      .filter(child => child.type === 'text')
-      .map(child => child.value)
+      .map(collectText)
       .join('')
-
-    const id = text
-      .toLowerCase()
-      .replace(/[^\w]+/g, '-')
-      .replace(/^-+|-+$/g, '')
+    const id = makeId(text)
 
     store.push({ depth: node.depth, text, id })
     })
@@ -121,25 +148,27 @@ function fuseCaption() {
           next.children[0].type === 'element' &&
           next.children[0].tagName === 'code'
 
-        if (isPStrong && isPreCode) {
+        const isTable =
+          next.type === 'element' &&
+          next.tagName === 'table'
+
+        if (isPStrong && (isPreCode || isTable)) {
           // strong の中身を抽出
           const strongNode = node.children[0]
-          const titleText = strongNode.children
-            .filter(c => c.type === 'text')
-            .map(c => c.value)
-            .join('')
+          const captionText = collectText(strongNode)
+          const id = makeId(captionText)
 
           const figcaption = {
             type: 'element',
             tagName: 'figcaption',
             properties: {},
-            children: [{ type: 'text', value: titleText }]
+            children: strongNode.children ?? []
           }
 
           const figure = {
             type: 'element',
             tagName: 'figure',
-            properties: {},
+            properties: { id },
             children: [ figcaption, next ]
           }
 
@@ -151,9 +180,26 @@ function fuseCaption() {
   }
 }
 
+function normalizeLocalLinks() {
+  return (tree) => {
+    visit(tree, 'element', (node) => {
+      if (node.tagName !== 'a') {
+        return
+      }
+
+      if (!node.properties) {
+        return
+      }
+
+      node.properties.href = normalizeLocalHref(node.properties.href)
+    })
+  }
+}
+
 let headings = []
 const processor = await unified()
   .use(remarkParse)
+  .use(remarkGfm)
   .use(remarkSlug)
   .use(extractHeadings, { store: headings })
   .use(remarkRehype)
@@ -172,6 +218,7 @@ const processor = await unified()
   .use(wrapSections)
   .use(unwrapParagraphInListItems)
   .use(fuseCaption)
+  .use(normalizeLocalLinks)
   .use(rehypeStringify)
 
 const bodyHtml = String(await processor.process(markdown))
