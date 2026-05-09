@@ -1,6 +1,7 @@
 import fs from 'fs'
 import remarkParse from 'remark-parse'
 import remarkGfm from 'remark-gfm'
+import remarkDirective from 'remark-directive'
 import remarkSlug from 'remark-slug'
 import remarkRehype from 'remark-rehype'
 import rehypeAutolinkHeadings from 'rehype-autolink-headings'
@@ -52,6 +53,76 @@ function extractHeadings(options = {}) {
     const id = makeId(text)
 
     store.push({ depth: node.depth, text, id })
+    })
+  }
+}
+
+function isDirectiveLabelNode(node) {
+  return (
+    node?.type === 'paragraph' &&
+    node.data?.directiveLabel === true
+  )
+}
+function makeSummaryNode(text) {
+  return {
+    type: 'paragraph',
+    data: {
+      hName: 'summary'
+    },
+    children: [
+      {
+        type: 'text',
+        value: text
+      }
+    ]
+  }
+}
+function asSummaryNode(node) {
+  node.data = node.data || {}
+  node.data.hName = 'summary'
+  delete node.data.directiveLabel
+  return node
+}
+function extractSummaryAndDetails(node, defaultSummary) {
+  const children = Array.isArray(node.children) ? node.children : []
+  const firstChild = children[0]
+
+  if (isDirectiveLabelNode(firstChild)) {
+    return {
+      summary: asSummaryNode(firstChild),
+      details: children.slice(1)
+    }
+  }
+
+  return {
+    summary: makeSummaryNode(defaultSummary),
+    details: children
+  }
+}
+
+function rewriteDirective() {
+  const defaultSummaries = {
+    answer: '解答を見る',
+    details: '詳細を見る',
+    spoiler: '開く'
+  }
+
+  return (tree) => {
+    visit(tree, 'containerDirective', (node) => {
+      const defaultSummary = defaultSummaries[node.name]
+
+      if (!defaultSummary) {
+        return
+      }
+
+      const { summary, details } = extractSummaryAndDetails(node, defaultSummary)
+
+      node.data = node.data || {}
+      node.data.hName = 'details'
+      node.data.hProperties = {
+        className: [node.name]
+      }
+      node.children = [summary, ...details]
     })
   }
 }
@@ -200,7 +271,9 @@ let headings = []
 const processor = await unified()
   .use(remarkParse)
   .use(remarkGfm)
+  .use(remarkDirective)
   .use(remarkSlug)
+  .use(rewriteDirective)
   .use(extractHeadings, { store: headings })
   .use(remarkRehype)
   .use(rehypeAutolinkHeadings, {
