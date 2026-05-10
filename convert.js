@@ -100,29 +100,97 @@ function extractSummaryAndDetails(node, defaultSummary) {
   }
 }
 
+function makeColumnTitleNode(text) {
+  return {
+    type: 'paragraph',
+    data: {
+      hName: 'p',
+      hProperties: {
+        className: ['column-title']
+      }
+    },
+    children: [
+      {
+        type: 'text',
+        value: text
+      }
+    ]
+  }
+}
+
+function asColumnTitleNode(node) {
+  node.data = node.data || {}
+  node.data.hName = 'p'
+  node.data.hProperties = {
+    ...(node.data.hProperties || {}),
+    className: ['column-title']
+  }
+  delete node.data.directiveLabel
+  return node
+}
+
+function extractColumnTitleAndBody(node, defaultTitle) {
+  const children = Array.isArray(node.children) ? node.children : []
+  const firstChild = children[0]
+
+  if (isDirectiveLabelNode(firstChild)) {
+    return {
+      title: asColumnTitleNode(firstChild),
+      body: children.slice(1)
+    }
+  }
+
+  return {
+    title: makeColumnTitleNode(defaultTitle),
+    body: children
+  }
+}
+
 function rewriteDirective() {
   const defaultSummaries = {
     answer: '解答を見る',
     details: '詳細を見る',
     spoiler: '開く'
   }
+  const defaultColumnTitles = {
+    note: '補足',
+    caution: '注意',
+    "coffee-break": 'コーヒーブレイク'
+  }
 
   return (tree) => {
     visit(tree, 'containerDirective', (node) => {
       const defaultSummary = defaultSummaries[node.name]
 
-      if (!defaultSummary) {
+      // details
+      if (defaultSummary) {
+        const { summary, details } = extractSummaryAndDetails(node, defaultSummary)
+
+        node.data = node.data || {}
+        node.data.hName = 'details'
+        node.data.hProperties = {
+          className: [node.name]
+        }
+        node.children = [summary, ...details]
         return
       }
 
-      const { summary, details } = extractSummaryAndDetails(node, defaultSummary)
+      // aside
+      const defaultColumnTitle = defaultColumnTitles[node.name]
 
-      node.data = node.data || {}
-      node.data.hName = 'details'
-      node.data.hProperties = {
-        className: [node.name]
+      if (defaultColumnTitle) {
+        const { title, body } = extractColumnTitleAndBody(node, defaultColumnTitle)
+
+        node.data = node.data || {}
+        node.data.hName = 'aside'
+        node.data.hProperties = {
+          className: [node.name]
+        }
+        node.children = [title, ...body]
+        return
       }
-      node.children = [summary, ...details]
+
+      throw new Error("unknown directive: "+node.name)
     })
   }
 }
@@ -223,7 +291,11 @@ function fuseCaption() {
           next.type === 'element' &&
           next.tagName === 'table'
 
-        if (isPStrong && (isPreCode || isTable)) {
+        const isList =
+          next.type === 'element' &&
+          (next.tagName === 'ul' || next.tagName === 'ol')
+
+        if (isPStrong && (isPreCode || isTable || isList)) {
           // strong の中身を抽出
           const strongNode = node.children[0]
           const captionText = collectText(strongNode)
