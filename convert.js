@@ -465,10 +465,12 @@ const processor = await unified()
   .use(rehypeStringify)
 
 const bodyHtml = String(await processor.process(markdown))
-const navHtml = `<nav class="toc">
+const tocHeadings = headings.filter(h => h.depth === 2)
+const navHtml = `<nav class="toc" aria-label="目次">
+  <div class="toc-title">目次</div>
   <ul>
-    ${headings.map(h => `
-      <li class="${h.depth > 1 ? 'indent' : ''}">
+    ${tocHeadings.map(h => `
+      <li>
         <a href="#${h.id}">${h.text}</a>
       </li>`).join('\n')}
   </ul>

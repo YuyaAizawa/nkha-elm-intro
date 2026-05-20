@@ -8,6 +8,14 @@
   --background-color: #FFFFFF;
 
   --border-radius: 0.3rem;
+
+  --content-width: 980px;
+  --toc-width: 13rem;
+  --toc-gap: 2rem;
+  --page-edge-gap: 1rem;
+  --toc-visible-width: calc(
+    var(--content-width) + (var(--toc-width) + var(--toc-gap) + var(--page-edge-gap)) * 2
+  );
 }
 
 body {
@@ -16,7 +24,7 @@ body {
 
 .markdown-body {
   box-sizing: border-box;
-  max-width: 980px;
+  max-width: var(--content-width);
   margin: 0 auto;
   color: var(--foreground-color);
   background-color: var(--background-color);
@@ -159,19 +167,64 @@ body {
   p {
     margin-bottom: 1.4rem;
   }
+}
 
-  .toc {
+nav.toc {
+  display: none;
+}
+@media screen and (min-width: 1500px) {
+  /*
+   * 横幅が充分大きいときだけ表示する
+   * 980px + (13rem + 2rem + 1rem) * 2 の概算値
+   * …だと足りなかったので適当に足した
+   */
+  nav.toc {
+    display: block;
     position: fixed;
     top: 2rem;
-    left: 1rem;
-    width: 200px;
-    font-size: 0.9em;
-  }
-  .toc ul {
-    list-style: none;
-    padding: 0;
-  }
-  .toc li.indent {
-    margin-left: 1em;
+    left: max(
+      var(--page-edge-gap),
+      calc((100vw - var(--content-width)) / 2 - var(--toc-gap) - var(--toc-width))
+    );
+    box-sizing: border-box;
+    width: var(--toc-width);
+    max-height: calc(100vh - 4rem);
+    overflow: auto;
+
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--base-muted-color);
+    border-left: 5px solid var(--base-color);
+    border-radius: var(--border-radius);
+    background: var(--background-color);
+    font-size: 0.9rem;
+
+    .toc-title {
+      margin-bottom: 0.5rem;
+      font-weight: bold;
+      color: var(--base-color);
+    }
+
+    ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    li {
+      margin: 0.25rem 0;
+    }
+
+    a {
+      display: block;
+      padding: 0.2rem 0.25rem;
+      border-radius: var(--border-radius);
+      color: var(--foreground-color);
+      text-decoration: none;
+    }
+
+    a:hover {
+      background: var(--base-muted-color);
+      color: var(--base-color);
+    }
   }
 }
