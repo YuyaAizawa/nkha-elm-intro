@@ -16,7 +16,7 @@ function collectText(node) {
     return node.value
   }
 
-  if (node.type === 'element' && Array.isArray(node.children)) {
+  if (Array.isArray(node.children)) {
     return node.children
       .map(collectText)
       .join('')
@@ -40,7 +40,104 @@ function normalizeLocalHref(href) {
   return `#${makeId(href.slice(1))}`
 }
 
+function makeTermDefinitionNode(label, term) {
+  return {
+    type: 'termDefinition',
+    data: {
+      hName: 'span',
+      hProperties: {
+        className: ['term-def']
+      }
+    },
+    children: [
+      {
+        type: 'termLabel',
+        data: {
+          hName: 'span',
+          hProperties: {
+            className: ['term-label']
+          }
+        },
+        children: [
+          {
+            type: 'text',
+            value: label
+          }
+        ]
+      },
+      {
+        type: 'termWord',
+        data: {
+          hName: 'span',
+          hProperties: {
+            className: ['term-word']
+          }
+        },
+        children: [
+          {
+            type: 'text',
+            value: term
+          }
+        ]
+      }
+    ]
+  }
+}
 
+function splitTermDefinitionsText(value) {
+  const pattern = /\{([^{}\n/]+)\/([^{}\n/]+)\}/g
+  const nodes = []
+  let lastIndex = 0
+
+  for (const match of value.matchAll(pattern)) {
+    const [whole, label, term] = match
+    const index = match.index
+
+    if (lastIndex < index) {
+      nodes.push({
+        type: 'text',
+        value: value.slice(lastIndex, index)
+      })
+    }
+
+    nodes.push(makeTermDefinitionNode(label.trim(), term.trim()))
+
+    lastIndex = index + whole.length
+  }
+
+  if (lastIndex < value.length) {
+    nodes.push({
+      type: 'text',
+      value: value.slice(lastIndex)
+    })
+  }
+
+  return nodes
+}
+
+function rewriteTermDefinitions() {
+  return (tree) => {
+    visit(tree, 'text', (node, index, parent) => {
+      if (!parent || typeof index !== 'number') {
+        return
+      }
+
+      if (!node.value.includes('{') || !node.value.includes('/')) {
+        return
+      }
+
+      const nodes = splitTermDefinitionsText(node.value)
+
+      if (nodes.length === 1 && nodes[0].type === 'text') {
+        return
+      }
+
+      parent.children.splice(index, 1, ...nodes)
+
+      return index + nodes.length
+    })
+  }
+}
 
 function extractHeadings(options = {}) {
   const { store = [] } = options
@@ -346,6 +443,7 @@ const processor = await unified()
   .use(remarkDirective)
   .use(remarkSlug)
   .use(rewriteDirective)
+  .use(rewriteTermDefinitions)
   .use(extractHeadings, { store: headings })
   .use(remarkRehype)
   .use(rehypeAutolinkHeadings, {

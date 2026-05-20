@@ -73,6 +73,29 @@ body {
     }
   }
 
+  .term-def {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.25em;
+    white-space: nowrap;
+    padding: 0 0.12em;
+    border-bottom: 1px dotted var(--accent-color);
+
+    .term-label {
+      font-weight: 600;
+    }
+    .term-word {
+      font-size: 0.86em;
+      color: var(--base-color);
+    }
+    .term-word::before {
+      content: "(";
+    }
+    .term-word::after {
+      content: ")";
+    }
+  }
+
   /* コラム */
   aside.caution {
     --base-color: #FE6426;
