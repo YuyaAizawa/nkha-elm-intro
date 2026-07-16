@@ -1,4 +1,6 @@
 import fs from 'fs'
+import { dirname } from 'node:path'
+import { parseArgs } from 'node:util'
 import remarkParse from 'remark-parse'
 import remarkGfm from 'remark-gfm'
 import remarkDirective from 'remark-directive'
@@ -9,7 +11,28 @@ import rehypeStringify from 'rehype-stringify'
 import { unified } from 'unified'
 import { visit } from 'unist-util-visit'
 
-const markdown = fs.readFileSync('index.md', 'utf8')
+const {
+  values: { output },
+  positionals
+} = parseArgs({
+  options: {
+    output: {
+      type: 'string',
+      short: 'o'
+    }
+  },
+  allowPositionals: true
+})
+
+if (positionals.length !== 1 || !output) {
+  console.error(
+    `Usage: node ${process.argv[1]} <input.md> --output <output.html>`
+  )
+  process.exit(1)
+}
+
+const [input] = positionals
+const markdown = fs.readFileSync(input, 'utf8')
 
 function collectText(node) {
   if (node.type === 'text') {
@@ -499,4 +522,5 @@ ${modCss}
 </html>
 `
 
-fs.writeFileSync('index.html', html)
+fs.mkdirSync(dirname(output), { recursive: true })
+fs.writeFileSync(output, html)
