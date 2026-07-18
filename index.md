@@ -69,15 +69,15 @@
 コンパイラのGitHubの[release](https://github.com/elm/compiler/releases/)に，Linux, Mac, Windowsのバイナリがあります．aptやnpmも対応しています．
 
 ```console
-$ curl -L -o elm.gz https://github.com/elm/compiler/releases/download/0.19.1/binary-for-linux-64-bit.gz
+$ curl -L -o elm.gz https://github.com/elm/compiler/releases/download/0.19.2/elm-0.19.2-linux-x64.gz
 $ gunzip elm.gz
 $ chmod +x elm
 $ sudo mv elm /usr/local/bin/
 $ elm --version
-0.19.1
+0.19.2
 ```
 
-aptを使う場合は`apt install elm-compiler`，npm派の人は`npm install elm@latest-0.19.1`からどうぞ．
+aptを使う場合は`apt install elm-compiler`(2026-07-18現在0.19.1)，npm派の人は`npm install elm@latest-0.19.2`からどうぞ．
 
 
 
@@ -467,7 +467,7 @@ Common Lispの関数呼び出しと異なり，Elmの関数適用は括弧が要
 
 先ほどの自作negateをreplに登録しましょう．`negate`の名前は組込みで使われているので`negete_`とアンダースコア(`_`)を付けます．Elmにおいてアンダースコアを付加するのは，名前の衝突を回避する手段として使われます．（公式に利用されている例としてはHtmlのtype属性に対応する関数[`Html.Attributes.type_`](https://package.elm-lang.org/packages/elm/html/latest/Html-Attributes#type_)があります）
 
-**nagete_**
+**negete_**
 ```repl
 > negate_ = \n -> 0 - n
 <function> : number -> number
@@ -1641,7 +1641,7 @@ not implicitly convert Ints to Floats. Use toFloat and round to do explicit
 conversions.
 ```
 
-[型注釈を付けない`negate_`](#nagete_)は`number -> number`でしたが，今回は`Int -> Int`に制限できています．
+[型注釈を付けない`negate_`](#negete_)は`number -> number`でしたが，今回は`Int -> Int`に制限できています．
 
 [年齢を増加する関数](#年齢を増加する関数)も以下のように型の範囲を狭めることができます．
 
