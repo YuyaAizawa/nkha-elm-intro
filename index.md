@@ -475,7 +475,7 @@ Common Lispの関数呼び出しと異なり，Elmの関数適用は括弧が要
 
 先ほどの自作negateをreplに登録しましょう．`negate`の名前は組込みで使われているので`negete_`とアンダースコア(`_`)を付けます．Elmにおいてアンダースコアを付加するのは，名前の衝突を回避する手段として使われます．（公式に利用されている例としてはHtmlのtype属性に対応する関数[`Html.Attributes.type_`](https://package.elm-lang.org/packages/elm/html/latest/Html-Attributes#type_)があります）
 
-**negete_**
+**negate_**
 ```repl
 > negate_ = \n -> 0 - n
 <function> : number -> number
@@ -694,7 +694,8 @@ case <式> of
   <パターンn> -> <式n>
 ```
 
-`case`の直後の式を評価した値がマッチするパターンを，**上から順に**検証し，マッチした矢印の右にある式がcase式の値になります．
+`case`の直後の式を評価した値がマッチするパターンを，**上から順に**検証し，マッチした矢印の右にある式がcase式の値になります．もちろん<式1>～<式n>の型は一貫していなければなりません．
+
 以下のように矢印の後で改行することもできます．
 
 ```
@@ -881,6 +882,19 @@ factorial 10
 
 `x :: xs`は先頭に要素がある場合にマッチするので，空以外の全てのリストにマッチするパターンです．関数型言語では頻出なので使えるようになっておきましょう．他の関数型言語では，リストの先頭要素に head / hd，それ以外の後続要素に tail / tl の変数名を当てることもあります．）
 
+再帰部分は以下のように展開できます．
+
+```
+sum [1, 2, 3]
+  = sum (1 :: (2 :: (3 :: [])))
+  = 1 + sum (2 :: (3 :: []))
+  = 1 + 2 + sum (3 :: [])
+  = 1 + 2 + 3 + sum []
+  = 1 + 2 + 3 + 0
+  = 6
+```
+
+
 パターンは組合わせることができ，例えば，以下のようにして要素数を数えることもできます．
 
 ```repl
@@ -981,7 +995,7 @@ if <Bool型の式> then <式> else <式>
 
 上記の構文で`<Bool型の式>`が`True`の場合はthenの後の`<式>`，`False`の場合はelseの後の`<式>`の値になります．
 
-`<Bool型の式>`の部分では，[等価演算](https://package.elm-lang.org/packages/elm/core/latest/Basics#equality)，[比較演算](https://package.elm-lang.org/packages/elm/core/latest/Basics#comparison)，[論理演算](https://package.elm-lang.org/packages/elm/core/latest/Basics#booleans)を利用することが多いでしょう．
+`<Bool型の式>`の部分では，[同値比較](#同値比較)，[大小比較](#comparable)，[論理演算](https://package.elm-lang.org/packages/elm/core/latest/Basics#booleans)を利用することが多いでしょう．
 
 比較演算を利用して，以前書いた[階乗を計算する関数](#階乗を計算する関数)を負数の場合に1となるように書き直します．
 
@@ -1131,7 +1145,7 @@ Listは0個以上の同じ型の順序のある要素を表すデータ構造で
 
 これは変数の一種なので式です．
 
-`map`関数（[仕様](https://package.elm-lang.org/packages/elm/core/latest/List#map)）は以下のように利用します．
+`range`関数（[仕様](https://package.elm-lang.org/packages/elm/core/latest/List#range)）は以下のように利用します．
 
 ```repl
 > List.range
@@ -1144,11 +1158,11 @@ Listは0個以上の同じ型の順序のある要素を表すデータ構造で
 
 1つ目にこの関数を選んだのは，サンプルの入力を作るのに便利なのと単純で動作が確認しやすいという理由で，特にすごい応用があるとかではありません．
 
-細かな注意点として，データ構造の`List`とモジュールの`List`は，分かりやすいように同じ名前を付けているだけで別のものを指します．もし`List`モジュールの中に`List`という型があれば，それは`List.List`となります．
+細かな注意点として，データ構造の`List`とモジュールの`List`は，分かりやすいように同じ名前を付けているだけで別のものを指します．もし`List`モジュールの中に`List`という型があれば，それは`List.List`で参照することになります．
 
 ### List.map
 
-リストらしい関数と言えば，リストの各要素を処理する`map`や`filter`,`fold`系の関数です（※個人の思想です）．これらの使いどころは手続き型言語のfor文とほぼ同じです（過言）
+リストらしい関数と言えば，リストの各要素を処理する`map`や`filter`,`fold`系の関数です（※個人の思想です）．これらの使いどころは手続き型言語のfor文とほぼ同じです（やや過言）
 
 まずはリストの各要素を変換する`map`を使ってみましょう．要素を変換する関数と変換対象のリストを引数に取り，変換後のリストを返します．Elmには副作用はないので，元のリストを書き換えるのではなく，新しいリストが作成されます．
 
@@ -1192,7 +1206,7 @@ Listは0個以上の同じ型の順序のある要素を表すデータ構造で
 List.map negate (List.filter isEven (List.range 1 5))
 ```
 
-あるいは`let`を使ってもう少し読み易く以下のようにするかもしれません．
+あるいは`let`を使ってもう少し読み易くできるかもしれません．
 
 ```elm
 let
@@ -1228,28 +1242,15 @@ List.map negate <| List.filter isEven <| List.range 1 5
 
 まるで結果を矢印の方向に受け渡しているように書けます．
 
-Elmを書く上では使い方がわかれば充分なのですが，一応定義も見ておきましょう．
+これらは単に関数適用する演算子で，`x |> f`，`f <| x`はいずれも`f x`です．
+パイプ演算子は，演算子が他の関数適用が優先されるのを利用して，コード上での表現を与えます．
 
-```elm
-infix right 0 (<|) = apL
-infix left  0 (|>) = apR
+**括弧の削減**  
+分かりやすいのは，括弧の代替です．例えば，`g (f x y)`を`g <| f x y`と書けるようになるため，うんざりする量の括弧を緩和することができます．（Haskellには同じことをする`$`という演算子があります）
 
-apL : (a -> b) -> a -> b
-apL f x = f x
-
-apR : a -> (a -> b) -> b
-apR x f = f x
-```
-
-`infix`はユーザーに解放されていませんが中置演算子を定義する記法で，結合の方向や優先度を指定します．`<|`は右結合（複数並んだら右から計算），`|>`は左結合（複数並んだら左から計算）で，優先度は最低（他の演算子を先に計算）です．
-
-`<|`(apL)も`|>`(apR)も，演算子であるというだけで中身はほとんどありません．`f <| x`も`x |> f`もただの`f x`で，演算子なので関数適用より結合の優先順位が低いだけです．しかし，それがコードに豊かな表現力を与えてくれます．
-
-ひとつは，括弧で括るのと似た挙動を実現できます．例えば，`g (f x y)`を`g <| f x y`と書けるようになるため，うんざりする量の括弧を緩和することができます．
-
+**オブジェクト指向ライクなAPI**  
 さらに重要なのは，（レシーバ）オブジェクトに相当する引数を関数の最後の引数とするAPI設計が慣習となっていることです．例えば，`this |> f x y z`は，`f x y z this`と等価であるため，パイプの根本側の計算結果(`this`)が最後の引数に渡ります．`List.map`や`List.filter`が操作対象を最後に置く一見奇妙な順番なのはこのためです．
-
-Elmの関数でオブジェクト指向を意識するならパイプで渡せるように設計するため，この一見何もしていない演算子は，ElmのAPIデザインに大きな影響を与えています．
+（Elmに`this`というキーワードはありませんし，最後の引数の中身が書き換えられることはありません．念のため．）
 
 ### 演習 リスト
 
@@ -1258,6 +1259,8 @@ List.range相当の機能を持った関数rangeを実装せよ．
 ヒント：[再帰関数を作る手順](#再帰関数を作る手順)を思い出してください．
 
 :::answer[解答例]
+
+**range**
 ```elm
 range : Int -> Int -> List Int
 range start end =
@@ -1273,19 +1276,32 @@ range start end =
 - 小さくする: `range start (end - 1)`
 - 答えを作る: `range start (end - 1) ++ [ end ]`
 
-Listは先頭に要素を付ける方が得意なので，`start :: range (start + 1) end`にしても良いですし，末尾再帰にしても良いです．
+慣れている人が多いと思ったため，リストの後ろを伸ばす回答をはじめに用意しましたが，Listは先頭に要素を付ける方が得意なので，`start :: range (start + 1) end`の方が良いです．
 
+**rangeリストフレンドリー**
 ```elm
-rangeHelper : Int -> Int -> List Int -> List Int
-rangeHelper start end result =
-  if end < start then
-    result
-  else
-    rangeHelper start (end - 1) (end :: result)
-
 range : Int -> Int -> List Int
 range start end =
-  rangeHelper start end []
+  if start > end then
+    []
+  else
+    start :: range (start + 1) end
+```
+
+末尾再帰にしても良いでしょう．再帰関数を使いこなすために，色々なスタイルで書いてみましょう．
+
+**range末尾再帰**
+```elm
+range : Int -> Int -> List Int
+range start end =
+  let
+    helper s e r =
+      if e < s then
+        r
+      else
+        helper s (e - 1) (e :: r)
+  in
+    helper start end []
 ```
 :::
 
@@ -1338,12 +1354,13 @@ True : Bool
 ```
 
 
-
 ## Set, Dict データ構造
 
-Setは同じ型の重複のない0個以上の順序のない要素を表すデータ構造です．Dictはk型のキーからv型のバリューを引くための辞書のデータ構造です．インターフェースが近いのでまとめてやりましょう．
+TODO: importも必要だしアプリを作り始めてからでもいいかも vs リストが基本になる関数型らしいAPIだしやっておきたいか
 
-TODO: これはアプリを作り始めてからでもいいかも
+Setは同じ型の重複のない0個以上の順序のない要素を表すデータ構造です．Dictはk型のキーからv型のバリューを引くための辞書のデータ構造です．
+
+共にListとの連携が深く，インターフェースも近いのでまとめて紹介します．
 
 ----
 
@@ -1683,7 +1700,7 @@ not implicitly convert Ints to Floats. Use toFloat and round to do explicit
 conversions.
 ```
 
-[型注釈を付けない`negate_`](#negete_)は`number -> number`でしたが，今回は`Int -> Int`に制限できています．
+[型注釈を付けない`negate_`](#negate_)は`number -> number`でしたが，今回は`Int -> Int`に制限できています．
 
 [年齢を増加する関数](#年齢を増加する関数)も以下のように型の範囲を狭めることができます．
 
