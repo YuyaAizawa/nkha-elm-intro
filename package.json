@@ -1,7 +1,7 @@
 {
     "type": "module",
     "scripts": {
-    "build": "node convert.js index.md --output dist/index.html"
+    "build": "node convert.js"
     },
     "dependencies": {
         "github-markdown-css": "^5.8.1",

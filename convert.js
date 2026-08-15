@@ -1,6 +1,6 @@
 import fs from 'fs'
-import { dirname } from 'node:path'
-import { parseArgs } from 'node:util'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import remarkParse from 'remark-parse'
 import remarkGfm from 'remark-gfm'
 import remarkDirective from 'remark-directive'
@@ -11,28 +11,22 @@ import rehypeStringify from 'rehype-stringify'
 import { unified } from 'unified'
 import { visit } from 'unist-util-visit'
 
-const {
-  values: { output },
-  positionals
-} = parseArgs({
-  options: {
-    output: {
-      type: 'string',
-      short: 'o'
-    }
+const projectDir = dirname(fileURLToPath(import.meta.url))
+
+const pages = [
+  {
+    input: 'index.md',
+    output: 'dist/index.html',
+    root: './',
+    id: 'intro'
   },
-  allowPositionals: true
-})
-
-if (positionals.length !== 1 || !output) {
-  console.error(
-    `Usage: node ${process.argv[1]} <input.md> --output <output.html>`
-  )
-  process.exit(1)
-}
-
-const [input] = positionals
-const markdown = fs.readFileSync(input, 'utf8')
+  {
+    input: 'practice.md',
+    output: 'dist/practice/index.html',
+    root: '../',
+    id: 'practice'
+  }
+]
 
 function collectText(node) {
   if (node.type === 'text') {
@@ -56,11 +50,36 @@ function makeId(text) {
 }
 
 function normalizeLocalHref(href) {
-  if (typeof href !== 'string' || !href.startsWith('#')) {
+  if (typeof href !== 'string') {
     return href
   }
 
-  return `#${makeId(href.slice(1))}`
+  const hashIndex = href.indexOf('#')
+  if (hashIndex < 0) {
+    return href
+  }
+
+  const path = href.slice(0, hashIndex)
+  const fragment = href.slice(hashIndex + 1)
+
+  // http:, https:, mailto: などの外部リンクは触らない
+  if (/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(path) || path.startsWith('//')) {
+    return href
+  }
+
+  if (fragment.length === 0) {
+    return href
+  }
+
+  // remark/rehype が既に URI encode している場合も一度戻してから id 化する
+  let decodedFragment = fragment
+  try {
+    decodedFragment = decodeURIComponent(fragment)
+  } catch {
+    // 不正な percent encoding は元の文字列のまま扱う
+  }
+
+  return `${path}#${makeId(decodedFragment)}`
 }
 
 function makeTermDefinitionNode(label, term) {
@@ -459,37 +478,39 @@ function normalizeLocalLinks() {
   }
 }
 
-let headings = []
-const processor = await unified()
-  .use(remarkParse)
-  .use(remarkGfm)
-  .use(remarkDirective)
-  .use(remarkSlug)
-  .use(rewriteDirective)
-  .use(rewriteTermDefinitions)
-  .use(extractHeadings, { store: headings })
-  .use(remarkRehype)
-  .use(rehypeAutolinkHeadings, {
-    behavior: 'append',
-    properties: {
-      className: ['anchor'],
-      ariaHidden: 'true'
-    },
-    content: {
-      type: 'text',
-      value: '🔗'
-    }
-  })
-  .use(removeWhitespaceTextNodes)
-  .use(wrapSections)
-  .use(unwrapParagraphInListItems)
-  .use(fuseCaption)
-  .use(normalizeLocalLinks)
-  .use(rehypeStringify)
+function createProcessor(headings) {
+  return unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .use(remarkDirective)
+    .use(remarkSlug)
+    .use(rewriteDirective)
+    .use(rewriteTermDefinitions)
+    .use(extractHeadings, { store: headings })
+    .use(remarkRehype)
+    .use(rehypeAutolinkHeadings, {
+      behavior: 'append',
+      properties: {
+        className: ['anchor'],
+        ariaHidden: 'true'
+      },
+      content: {
+        type: 'text',
+        value: '🔗'
+      }
+    })
+    .use(removeWhitespaceTextNodes)
+    .use(wrapSections)
+    .use(unwrapParagraphInListItems)
+    .use(fuseCaption)
+    .use(normalizeLocalLinks)
+    .use(rehypeStringify)
+}
 
-const bodyHtml = String(await processor.process(markdown))
-const tocHeadings = headings.filter(h => h.depth === 2)
-const navHtml = `<nav class="toc" aria-label="目次">
+function makeTocHtml(headings) {
+  const tocHeadings = headings.filter(h => h.depth === 2)
+
+  return `<nav class="toc" aria-label="目次">
   <div class="toc-title">目次</div>
   <ul>
     ${tocHeadings.map(h => `
@@ -498,10 +519,48 @@ const navHtml = `<nav class="toc" aria-label="目次">
       </li>`).join('\n')}
   </ul>
 </nav>`
+}
 
-const githubCss = fs.readFileSync('node_modules/github-markdown-css/github-markdown-light.css', 'utf8')
-const modCss = fs.readFileSync('style.css', 'utf8')
-const html = `
+function makeSiteNavHtml(page) {
+  const links = [
+    {
+      id: 'intro',
+      href: page.root,
+      label: 'Elm入門'
+    },
+    {
+      id: 'practice',
+      href: `${page.root}practice/`,
+      label: '実践編：ポーカー'
+    }
+  ]
+
+  return `<nav class="site-nav" aria-label="ページ">
+    ${links.map(link => {
+      const current = link.id === page.id ? ' aria-current="page"' : ''
+      return `<a href="${link.href}"${current}>${link.label}</a>`
+    }).join(' / ')}
+  </nav>`
+}
+
+const githubCss = fs.readFileSync(
+  join(projectDir, 'node_modules/github-markdown-css/github-markdown-light.css'),
+  'utf8'
+)
+const modCss = fs.readFileSync(join(projectDir, 'style.css'), 'utf8')
+
+async function convertPage(page) {
+  const input = join(projectDir, page.input)
+  const output = join(projectDir, page.output)
+  const markdown = fs.readFileSync(input, 'utf8')
+
+  const headings = []
+  const processor = createProcessor(headings)
+  const bodyHtml = String(await processor.process(markdown))
+  const tocHtml = makeTocHtml(headings)
+  const siteNavHtml = makeSiteNavHtml(page)
+
+  const html = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -512,9 +571,10 @@ ${modCss}
   </style>
 </head>
 <body>
-  ${navHtml}
+  ${tocHtml}
   <div class="Box-sc-g0xbh4-0 bUQNHB">
     <article class="markdown-body entry-content container-lg" itemprop="text">
+      ${siteNavHtml}
       ${bodyHtml}
     </article>
   </div>
@@ -522,5 +582,10 @@ ${modCss}
 </html>
 `
 
-fs.mkdirSync(dirname(output), { recursive: true })
-fs.writeFileSync(output, html)
+  fs.mkdirSync(dirname(output), { recursive: true })
+  fs.writeFileSync(output, html)
+}
+
+for (const page of pages) {
+  await convertPage(page)
+}
