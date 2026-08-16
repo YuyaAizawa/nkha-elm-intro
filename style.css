@@ -104,6 +104,59 @@ body {
     }
   }
 
+  /** たためる要素 **/
+  details.answer,
+  details.details,
+  details.spoiler {
+    margin: 1.4rem 0;
+    border: 2px solid var(--base-muted-color);
+    border-radius: calc(var(--border-radius) * 2);
+
+    transition:
+      max-block-size 3000ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      border-color 360ms ease;
+    max-block-size: 3.35rem;
+
+    &::details-content {
+      margin: 0 1rem;
+
+      transition:
+        opacity 320ms ease;
+      opacity: 0;
+    }
+
+    summary {
+      list-style: none;
+      padding: 0.5rem;
+
+      &::before {
+        content: "▶";
+        display: inline-block;
+        flex: none;
+        color: var(--base-color);
+        font-size: 0.86rem;
+        line-height: 1;
+
+        transition:
+          transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+        transform-origin: center;
+      }
+    }
+
+    &[open] {
+      max-block-size: 240rem;
+      border-color: var(--base-color);
+
+      &::details-content {
+        opacity: 1;
+      }
+
+      summary::before {
+        transform: rotate(90deg);
+      }
+    }
+  }
+
   /* コラム */
   aside.caution {
     --base-color: #FE6426;

@@ -526,12 +526,12 @@ function makeSiteNavHtml(page) {
     {
       id: 'intro',
       href: page.root,
-      label: 'Elm入門'
+      label: '座学編：基本文法'
     },
     {
       id: 'practice',
       href: `${page.root}practice/`,
-      label: '実践編：ポーカー'
+      label: '実践編：アプリ開発'
     }
   ]
 
@@ -539,7 +539,7 @@ function makeSiteNavHtml(page) {
     ${links.map(link => {
       const current = link.id === page.id ? ' aria-current="page"' : ''
       return `<a href="${link.href}"${current}>${link.label}</a>`
-    }).join(' / ')}
+    }).join(' | ')}
   </nav>`
 }
 
