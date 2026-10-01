@@ -710,10 +710,10 @@ cardView (Card suit rank) =
 HTMLには[チェックボックス](https://developer.mozilla.org/ja/docs/Web/HTML/Reference/Elements/input/checkbox)という丁度良いUIがあります．データの送信はしないので`<form>`は使わず，`<input>`と`<label>`で良いでしょう．
 
 ```html
-<div>
-  <input type="checkbox" />
-  <label>♠1</label>
-</div>
+<label>
+    <input type="checkbox" />
+    ♠1
+</label>
 ```
 
 上記のようなHTMLを手札毎に作れば良いわけです．
@@ -732,9 +732,9 @@ view { hands } =
 --     |> List.map cardView
 --     |> div []
 --
-    div []
+    label []
         [ input [ Attr.type_ "checkbox" ] []
-        , label [] [ text "♠1" ]
+        , text "♠1"
         ]
 ```
 
@@ -754,9 +754,9 @@ cardView (Card suit rank) =
     let
         str = suitToString suit ++ String.fromInt rank
     in
-        div []
+        label []
             [ input [ Attr.type_ "checkbox" ] []
-            , label [] [ text str ]
+            , text str
             ]
 ```
 
@@ -768,31 +768,36 @@ cardView (Card suit rank) =
 
 `Html.Events`の`onCheck : (Bool -> msg) -> Attribute msg`という関数があるのでこれを使います．チェックボックスの状態が変化するときにメッセージを送るやつです．
 
-`onClick`と同様に属性を作るのですが，こちらは引数に`Bool -> msg`を要求します．チェックが入っているかを`Bool`で受け取って`Msg`を返す関数（を受け取って属性を返す関数）です．
+**Eventの送り方に悩んだらサンプルのonClickを思い出す**
+```elm
+button [ onClick Increment ] [ text "+1" ]
+```
+
+`onClick : msg -> Html.Attribute msg`と同様に属性を作るのですが，こちらは引数に`Bool -> msg`を要求します．チェックが入っているかを`Bool`で受け取って`msg`を返す関数（を受け取って属性を返す関数）です．
 
 送るメッセージは色々考えられますが，今回はn枚目のカードの選択/非選択を設定する，`Select Int Bool`というメッセージを追加します．`Select 0 True`であれば0枚目を選択状態にするメッセージです．
-
-属性は`onCheck <| Select n`と書けます．カスタム型を定義したときに`Select : Int -> Bool -> Msg`という関数が自動で生えたからです．それを`Select n : Bool -> Msg`で部分適用風味に書いています．（慣れない内は`Seclect (\check -> Select n check)`と書きましょう）
-
-さて，属性は書けるのですがそのまま組込むと…
 
 ```elm
 type Msg
     = Select Int Bool
+```
 
-...
+属性は`onCheck <| Select n`と書けます．カスタム型を定義したときに`Select : Int -> Bool -> Msg`という関数が自動で生えたからです．それを`Select n : Bool -> Msg`で部分適用風味に書いています．（慣れない内は`onCheck <| \check -> Select n check`と書いても良いです）
 
+さて，属性は書けるのですがそのまま組込むと…
+
+```elm
 cardView : Card -> Html Msg
 cardView (Card suit rank) =
     let
         str = suitToString suit ++ String.fromInt rank
     in
-        div []
+        label []
             [ input
                 [ Attr.type_ "checkbox"
                 , onCheck <| Select n  -- nって何？
                 ] []
-            , label [] [ text str ]
+            , text str
             ]
 ```
 
@@ -806,12 +811,12 @@ cardView n (Card suit rank) =  -- 第1引数に何枚目のカードかを追加
     let
         str = suitToString suit ++ String.fromInt rank
     in
-        div []
+        label []
             [ input
                 [ Attr.type_ "checkbox"
                 , onCheck <| Select n
                 ] []
-            , label [] [ text str ]
+            , text str
             ]
 ```
 
@@ -940,13 +945,13 @@ cardView n ( (Card suit rank), selected, discarded ) =
             else
                 suitToString suit ++ String.fromInt rank
     in
-        div []
+        label []
             [ input
                 [ Attr.type_ "checkbox"
                 , Attr.checked selected  -- 選択中かどうか
                 , onCheck <| Select n
                 ] []
-            , label [] [ text str ]
+            , text str
             ]
 ```
 
@@ -981,13 +986,13 @@ cardView n ( (Card suit rank), selected, discarded ) =
             else
                 suitToString suit ++ String.fromInt rank
     in
-        div []
+        label []
             [ input
                 [ Attr.type_ "checkbox"
                 , Attr.checked selected
                 , onCheck <| Select n
                 ] []
-            , label [] [ text str ]
+            , text str
             ]
 
 zip3 : List a -> List b -> List c -> List ( a, b, c )
@@ -1104,13 +1109,13 @@ cardView n ( (Card suit rank), selected, discarded ) =
             else
                 suitToString suit ++ String.fromInt rank
     in
-        div []
+        label []
             [ input
                 [ Attr.type_ "checkbox"
                 , Attr.checked selected
                 , onCheck <| Select n
                 ] []
-            , label [] [ text str ]
+            , text str
             ]
 
 zip3 : List a -> List b -> List c -> List ( a, b, c )
@@ -1180,4 +1185,176 @@ withContexts [A, B, C, D] =
 
 ElmはHTMLとCSSで簡単に見た目を整えられるので，活かしていきましょう．
 HTML/CSSでのデザインはネット上に資産が多く，AIの回答精度も高いです．
+画像はGIFを使えば簡易アニメーション，SVGを使えばElmから細かな制御が可能です．
+
+今回はHTMLをCSSで装飾します．それでも簡易な3Dやアニメーションは付けられます．
+
+### 枠をつける
+
+とりあえず見栄えのために枠を付けましょう．
+
+まずはCSSで指定するためのclass属性を指定します．
+`label`に"card"と付けましょう．
+
+```elm
+cardView : Int -> ( Card, Bool, Bool ) -> Html Msg
+cardView n ( (Card suit rank), selected, discarded ) =
+    let
+        str =
+            if discarded then
+                "すてた"
+            else
+                suitToString suit ++ String.fromInt rank
+    in
+        label [ Attr.class "card" ]  -- ここだけ
+            [ input
+                [ Attr.type_ "checkbox"
+                , Attr.checked selected
+                , onCheck <| Select n
+                ] []
+            , text str
+            ]
+```
+
+次にlabelの枠や背景，checkboxの非表示，代わりに背景色を変えて選択されている感を出します．
+
+```css
+.card {
+    /* 形状指定可能に */
+    display: block;
+    /* 形状 */
+    width: 70px;
+    height: 100px;
+    border-radius: 8px;
+    /* 色 */
+    background-color: white;
+    border: 1px solid black;
+    /* 文字を選択しないように */
+    user-select: none;
+}
+.card:has(input:checked) {
+    /* 選択中の色 */
+    background-color: lightgray;
+}
+.card input[type="checkbox"] {
+    /* chekbox本体を消す */
+    display: none;
+}
+```
+詳しくは解説しませんが，タグやクラス，それらのネストなどで要素を指定し，それらの見た目を指定できます．
+
+これをEllieの左下のHTMLのstyleタグの中にコピーします．
+
+どうでしょうか．
+block要素にしたせいで縦に並ぶと思いますが，ちょっと見栄えがして来たでしょう？
+
+中の呪文を作るときはLLMに聞くのが早いです．
+目印になりそうな箇所にclass属性で名前を付けて，コンパイル，実行し，開発者モードでHTMLをコピーしたら，「checkboxが選択中のときcardを暗くするcssを出して」と言えば恐らく出てきます．
+
+### 横に並べ直す
+
+これもCSSでやるのですが，歴史的経緯でいくつも方法があります．
+縦横に並べるにはflexboxが便利なので今回はそれでやりましょう．
+
+ならべる入れ物の役割が必要なので，`card`をまとめる`div`に"card-list"と付けましょう．
+
+```elm
+view : Model -> Html Msg
+view { hands, selected, discarded } =
+    let
+        cards =
+            zip3 hands selected discarded
+                |> List.indexedMap cardView  -- divを外した
+    in
+        div []
+            [ div [ Attr.class "card-list" ] cards  -- ここに移動
+            , button [ onClick Discard ] [ text "すてる" ]
+            ]
+```
+
+class属性を付けたかったので，見易いように`cards : List (Html Msg)`にしました．
+
+CSSにflexboxの横並びを追加します．
+
+```css
+.card-list {
+    /* 入れ物にする */
+    display: flex;
+    /* 要素ごとの隙間 */
+    gep: 10px;
+}
+.card {
+    ...
+    flex-shrink: 0; /* 自動で縮まないように */
+}
+```
+
+styleタグに書き加えてCOMPILEしましょう．
+
+### スートとランクを中央に重ねる
+
+中央に大きなスートを薄く描いて，その上にランクを重ねたらもっと見栄えがしそうです．
+
+まずはCSSから選択できるようにスートとランクを別の要素にしてclassを付けます．
+
+```elm
+cardView : Int -> ( Card, Bool, Bool ) -> Html Msg
+cardView n ( (Card suit rank), selected, discarded ) =
+    let
+        center =
+            if discarded then
+                [ span [] [ text <| "すてた" ] ]
+            else
+                [ span [ Attr.class "suit" ] [ text <| suitToString suit ]
+                , span [ Attr.class "rank" ] [ text <| String.fromInt rank ]
+                ]
+    in
+        label [ Attr.class "card" ]
+            [ input
+                [ Attr.type_ "checkbox"
+                , Attr.checked selected
+                , onCheck <| Select n
+                ] []
+            , div [ Attr.class "card-center" ] center
+            ]
+```
+
+spanはインラインの汎用タグです．divに似ていますがブロックではないです．
+文中に置けるような，しかし区別はしたい範囲がspanです．
+
+divとの使い分けは，今回は絵を描いているのでそんなに気にしなくても良いです．
+
+CSSは今回入れ子表記にしてみました．
+
+```CSS
+.card {
+    ...
+    /* 子要素の基準位置 */
+    position: relative;
+}
+.card-center {
+    /* 中央に */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    /* フォント */
+    font-family: "Times New Roman";
+
+    .suit {
+        font-size: 100px;
+        color: darkgray;
+        transform: translate( 0, -5%);
+    }
+
+    .rank {
+        position: absolute;
+        font-size: 60px;
+    }
+}
+```
 
