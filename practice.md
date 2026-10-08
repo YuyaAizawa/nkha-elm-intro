@@ -1193,8 +1193,52 @@ HTML/CSSでのデザインはネット上に資産が多く，AIの回答精度�
 
 とりあえず見栄えのために枠を付けましょう．
 
-まずはCSSで指定するためのclass属性を指定します．
-`label`に"card"と付けましょう．
+HTMLの見栄えを整えるにはCSSが便利です．
+この入門ではCSSの細かい機能は解説しませんが，構造と名称がわからないと口頭での解説も難しいため，それだけ触れておきましょう．
+
+**CSSの基本的な構造**
+```
+<セレクタ> {
+    <プロパティ1>: <値1>;
+    <プロパティ2>: <値2>;
+    ...  
+}
+<他のセレクタ> {
+    ...  
+}
+...
+```
+
+- {セレクタ/selector}: スタイルを適用するHTML要素 （タグ，クラスなど）
+- {プロパティ/property}: 設定項目 （要素の大きさ，文字の色など）
+- {値/value}: 設定値（18px，"Meiryo"など）
+
+早くアプリを映えさせたいので，習うより慣れましょう．
+今回は最も汎用的なクラスをベースにしたセレクタで指定します．
+
+まずはカードの見た目を作るのでcardというクラスの見た目を書きます．
+
+**カードのベースとなる枠**  
+```css
+.card {
+    /* 形状指定可能に */
+    display: block;
+    /* 形状 */
+    width: 84px;
+    height: 119px;
+    /* 色 */
+    background-color: white;
+    border: 1px solid black;
+}
+```
+
+カードの元となる四角い枠を表したものです．
+これをEllieの左下のHTMLのstyleタグの中にコピーして使うのですが，コンパイルしてもまだ反映されません．
+
+ドットからはじまるセレクタはclass属性で指定するもので，class="card"という属性をHTML側で付けてやる必要があります．
+
+というわけで，Elm側も変更します．
+`label`に"card"というclassの属性を付けましょう．
 
 ```elm
 cardView : Int -> ( Card, Bool, Bool ) -> Html Msg
@@ -1206,7 +1250,7 @@ cardView n ( (Card suit rank), selected, discarded ) =
             else
                 suitToString suit ++ String.fromInt rank
     in
-        label [ Attr.class "card" ]  -- ここだけ
+        label [ Attr.class "card" ]  -- ここ
             [ input
                 [ Attr.type_ "checkbox"
                 , Attr.checked selected
@@ -1216,15 +1260,20 @@ cardView n ( (Card suit rank), selected, discarded ) =
             ]
 ```
 
-次にlabelの枠や背景，checkboxの非表示，代わりに背景色を変えて選択されている感を出します．
+コンパイルすれば縦に並んだ枠の中にチェックボックスが入っているハズです．
+
+このままじゃショボいので，ありったけ飾り付けていきましょう．
+例えば，`border-radius: 8px;`を追加したら枠の角が丸まります．
+
+さらに「チェックボックス」のチェック部分を消し，代わりに「選択されているカード」の背景色を変えます．
 
 ```css
 .card {
     /* 形状指定可能に */
     display: block;
     /* 形状 */
-    width: 70px;
-    height: 100px;
+    width: 89px;
+    height: 119px;
     border-radius: 8px;
     /* 色 */
     background-color: white;
@@ -1232,31 +1281,32 @@ cardView n ( (Card suit rank), selected, discarded ) =
     /* 文字を選択しないように */
     user-select: none;
 }
-.card:has(input:checked) {
-    /* 選択中の色 */
-    background-color: lightgray;
-}
 .card input[type="checkbox"] {
     /* chekbox本体を消す */
     display: none;
 }
+.card:has(input:checked) {
+    /* 選択中の色 */
+    background-color: lightgray;
+}
 ```
-詳しくは解説しませんが，タグやクラス，それらのネストなどで要素を指定し，それらの見た目を指定できます．
 
-これをEllieの左下のHTMLのstyleタグの中にコピーします．
+追加された2つのセレクタがそれぞれ対応します．`.card input[type="checkbox"]`は「cardクラスの子孫で，属性にtype="checkbox"をもつinput要素」を，`.card:has(input:checked)`は「checkedなinputを持つ要素cardクラス」をそれぞれ指定しています．
 
-どうでしょうか．
-block要素にしたせいで縦に並ぶと思いますが，ちょっと見栄えがして来たでしょう？
+Mozillaが[セレクタの入門ページ](https://developer.mozilla.org/ja/docs/Learn_web_development/Core/Styling_basics/Basic_selectors)を日本語で出しているので
+，詳しく知りたい方は参照してください．
+
+さて，上記をコピーするとどうでしょうか．ちょっと見栄えがして来たでしょう？
 
 中の呪文を作るときはLLMに聞くのが早いです．
-目印になりそうな箇所にclass属性で名前を付けて，コンパイル，実行し，開発者モードでHTMLをコピーしたら，「checkboxが選択中のときcardを暗くするcssを出して」と言えば恐らく出てきます．
+目印になりそうな箇所にclass属性で名前を付けて，コンパイルして，開発者モードでHTMLをコピーしたら，「checkboxが選択中のときcardを暗くするcssを出して」と言えば恐らく出てきます．
 
 ### 横に並べ直す
 
 これもCSSでやるのですが，歴史的経緯でいくつも方法があります．
-縦横に並べるにはflexboxが便利なので今回はそれでやりましょう．
+縦横に並べるには[Flexbox](https://developer.mozilla.org/ja/docs/Web/CSS/Guides/Flexible_box_layout/Basic_concepts)が便利なので今回はそれでやりましょう．
 
-ならべる入れ物の役割が必要なので，`card`をまとめる`div`に"card-list"と付けましょう．
+並べるには入れ物の役割が必要なので，`card`をまとめる`div`に"card-list"と付けましょう．
 
 ```elm
 view : Model -> Html Msg
@@ -1272,7 +1322,7 @@ view { hands, selected, discarded } =
             ]
 ```
 
-class属性を付けたかったので，見易いように`cards : List (Html Msg)`にしました．
+class属性を付けたかったので，見易いように`cards`を`List (Html Msg)`にしました．
 
 CSSにflexboxの横並びを追加します．
 
@@ -1281,7 +1331,7 @@ CSSにflexboxの横並びを追加します．
     /* 入れ物にする */
     display: flex;
     /* 要素ごとの隙間 */
-    gep: 10px;
+    gap: 10px;
 }
 .card {
     ...
@@ -1324,7 +1374,7 @@ spanはインラインの汎用タグです．divに似ていますがブロッ�
 
 divとの使い分けは，今回は絵を描いているのでそんなに気にしなくても良いです．
 
-CSSは今回入れ子表記にしてみました．
+CSSは今回入れ子表記（「○○の子孫の～」に対応）にしてみました．
 
 ```CSS
 .card {
@@ -1341,7 +1391,6 @@ CSSは今回入れ子表記にしてみました．
     display: flex;
     justify-content: center;
     align-items: center;
-
     /* フォント */
     font-family: "Times New Roman";
 
@@ -1358,3 +1407,258 @@ CSSは今回入れ子表記にしてみました．
 }
 ```
 
+文字を並べただけの見た目からはずいぶん良くなったのではないでしょうか．
+
+### カードめくりアニメーション
+
+カードをめくるアニメーションがあったらちょっとかっこいいですよね．
+ちょっとした3DアニメーションならCSSだけで可能です．
+
+```css
+@keyframes flipAnimation {
+      from { transform: rotateY(180deg); }
+      to   { transform: rotateY(  0deg); }
+}
+.card {
+    ...
+    /* 3Dアニメーション */
+    transform-style: preserve-3d;
+    transform: rotateY(180deg);
+    animation: flipAnimation 600ms ease forwards;
+}
+.card-center {
+    /* 裏面の描画をしない */
+    backface-visibility: hidden;
+}
+```
+
+詳しくは説明しませんが，`@keyframe`で変化させたいプロパティの始点と終点に名前をつけ，`animation`プロパティでその名前を指定して適用します．時間や緩急，繰り返しなども簡単です．
+
+これだけで動くはずです．
+
+ついでに，皆さん大好きな時間差も入れましょう．
+
+```css
+.card:nth-child(1) { animation-delay:  400ms; }
+.card:nth-child(2) { animation-delay:  600ms; }
+.card:nth-child(3) { animation-delay:  800ms; }
+.card:nth-child(4) { animation-delay: 1000ms; }
+.card:nth-child(5) { animation-delay: 1200ms; }
+```
+
+`nth-child`はn番目の子要素であるときにそれを指定できます．
+nを束縛できないので，地道に5枚それぞれ指定して，アニメーションの開始時間を遅らせています．
+
+かなりいい感じになってきましたね．
+フォントやアニメーションの微調整も楽しいですが，そろそろ「すてた」標示も気になるので，elmプログラミングに戻りましょう．
+
+:::details[カードめくりアニメーションまでのコード]
+```elm
+module Main exposing (main)
+
+import Browser
+import Html exposing (..)
+import Html.Attributes as Attr
+import Html.Events exposing (onCheck, onClick)
+
+
+main =
+    Browser.sandbox
+        { init = initialModel
+        , view = view
+        , update = update
+        }
+
+
+
+-----------
+-- MODEL --
+-----------
+
+type alias Model =
+    { hands : List Card
+    , selected : List Bool  -- 捨て札として選択中
+    , discarded : List Bool  -- 捨てた（仮置き）
+    }
+
+type Card = Card Suit Rank
+
+type Suit
+    = Spade
+    | Heart
+    | Diamond
+    | Club
+
+suitToString suit =
+    case suit of
+        Spade -> "♠"
+        Heart -> "♥"
+        Diamond -> "♦"
+        Club -> "♣"
+
+type alias Rank = Int
+
+initialModel : Model
+initialModel =
+    { hands = List.repeat 5 (Card Spade 1)
+    , selected = List.repeat 5 False
+    , discarded = List.repeat 5 False
+    }
+
+
+
+------------
+-- UPDATE --
+------------
+
+type Msg
+    = Select Int Bool
+    | Discard
+
+update : Msg -> Model -> Model
+update msg model =
+    case msg of
+        Select n value ->
+            let
+                newSelected = 
+                    model.selected
+                        |> listUpdateAt n value
+            in
+                { model | selected = newSelected }
+        Discard ->
+            { model | discarded = model.selected }
+
+listUpdateAt : Int -> a -> List a -> List a
+listUpdateAt n value list =
+    list
+        |> List.indexedMap (\idx a -> if idx == n then value else a)
+
+
+
+----------
+-- VIEW --
+----------
+
+view : Model -> Html Msg
+view { hands, selected, discarded } =
+    let
+        cards =
+            zip3 hands selected discarded
+                |> List.indexedMap cardView
+    in
+        div []
+            [ div [ Attr.class "card-list" ] cards
+            , button [ onClick Discard ] [ text "すてる" ]
+            ]
+
+cardView : Int -> ( Card, Bool, Bool ) -> Html Msg
+cardView n ( (Card suit rank), selected, discarded ) =
+    let
+        center =
+            if discarded then
+                [ span [] [ text <| "すてた" ] ]
+            else
+                [ span [ Attr.class "suit" ] [ text <| suitToString suit ]
+                , span [ Attr.class "rank" ] [ text <| String.fromInt rank ]
+                ]
+    in
+        label [ Attr.class "card" ]
+            [ input
+                [ Attr.type_ "checkbox"
+                , Attr.checked selected
+                , onCheck <| Select n
+                ] []
+            , div [ Attr.class "card-center" ] center
+            ]
+
+zip3 : List a -> List b -> List c -> List ( a, b, c )
+zip3 listA listB listC =
+    List.map3 (\a b c -> ( a, b, c )) listA listB listC
+```
+
+```css
+@keyframes flipAnimation {
+      from { transform: rotateY(180deg); }
+      to   { transform: rotateY(  0deg); }
+}
+.card-list {
+    /* 入れ物にする */
+    display: flex;
+    /* 要素ごとの隙間 */
+    gap: 10px;
+}
+.card {
+    /* 形状指定可能に */
+    display: block;
+    /* 形状 */
+    width: 89px;
+    height: 119px;
+    border-radius: 8px;
+    /* 色 */
+    background-color: white;
+    border: 1px solid black;
+    /* 子要素の基準位置 */
+    position: relative;
+    /* 文字を選択しないように */
+    user-select: none;
+    /* 自動で縮むのを防止 */
+    flex-shrink: 0;
+    /* 3Dアニメーション */
+      transform-style: preserve-3d;
+    transform: rotateY(180deg);  /* 基本裏向き*/
+    animation: flipAnimation 600ms ease forwards;
+
+    /* 中のchekbox */
+    input[type="checkbox"] {
+        /* chekbox本体を消す */
+        display: none;
+    }
+}
+.card-center {
+    /* 中央に */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    /* フォント */
+    font-family: "Times New Roman";
+    /* 裏面の描画をしない */
+    backface-visibility: hidden;
+
+    .suit {
+        font-size: 100px;
+        color: darkgray;
+        transform: translate( 0, -5%);
+    }
+
+    .rank {
+        position: absolute;
+        font-size: 60px;
+    }
+}
+.card:has(input:checked) {
+    /* 選択中の色 */
+    background-color: lightgray;
+}
+.card:nth-child(1) { animation-delay:  400ms; }
+.card:nth-child(2) { animation-delay:  600ms; }
+.card:nth-child(3) { animation-delay:  800ms; }
+.card:nth-child(4) { animation-delay: 1000ms; }
+.card:nth-child(5) { animation-delay: 1200ms; }
+```
+:::
+
+:::coffee-break[Htmlのスタイル指定]
+ElmのHtmlにスタイルを指定する方法には，これまでやったCSSの他にもうひとつ，
+直接style属性を付けるというのがあります．コード上で直接`Attribute.style "background-color" "red"`のような属性を書けば，
+それがHTMLに反映されるため，CSSに依らずにスタイルを指定できます．
+
+この方法はElmから直接操作できるため柔軟な指定が可能な一方，
+制御するためのコードが煩雑になりがちです．
+基本的には，CSSにした方が整理されたコードを書きやすいでしょう．
+
+指定するスタイルが少なかったり，別にCSSファイルを作りたくないような場合は，直接のスタイル指定も覚えておくとよいかもしれません．
+:::
