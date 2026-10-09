@@ -716,9 +716,13 @@ HTMLには[チェックボックス](https://developer.mozilla.org/ja/docs/Web/H
 </label>
 ```
 
+`<input>`要素だけでチェックボックスにはなりますが，`<label>`で囲んだ部分がクリックに反応するようになります．
+
 上記のようなHTMLを手札毎に作れば良いわけです．
 
-Elmにも`Html.input`と`Html.label`があるので，それで動くか確かめます．一時的に`view`を書き換えます．
+Elmにも[`Html.input`](https://package.elm-lang.org/packages/elm/html/1.0.1/Html#input)と[`Html.label`](https://package.elm-lang.org/packages/elm/html/1.0.1/Html#label)があるので，それで動作を確かめます．
+
+複数あっても分かりづらいので，一時的に`view`を書き換えます．
 
 ```elm
 import Html exposing (..)
@@ -738,7 +742,7 @@ view { hands } =
         ]
 ```
 
-`type`はキーワードなので，`Html.Attributes.type_`とアンダースコアが付きます．
+`type`はキーワードなので，[`Html.Attributes.type_`](https://package.elm-lang.org/packages/elm/html/1.0.1/Html-Attributes#type_)とアンダースコアが付きます．
 
 それっぽいUIが出ることを確認したら，このコードを本来のカードの可視化部分である`cardView`に組み込んで，`view`は戻します．
 
@@ -766,7 +770,7 @@ cardView (Card suit rank) =
 
 見た目はできましたが，このままではElm側でどのカードがチェックされたか分からないので，メッセージを送るようにしましょう．
 
-`Html.Events`の`onCheck : (Bool -> msg) -> Attribute msg`という関数があるのでこれを使います．チェックボックスの状態が変化するときにメッセージを送るやつです．
+`Html.Events`の[`onCheck : (Bool -> msg) -> Attribute msg`](https://package.elm-lang.org/packages/elm/html/1.0.1/Html-Events#onCheck)という関数があるのでこれを使います．チェックボックスの状態が変化するときにメッセージを送るやつです．
 
 **Eventの送り方に悩んだらサンプルのonClickを思い出す**
 ```elm
@@ -885,7 +889,7 @@ update msg model =
 
 selectedをdiscardedに反映するのは簡単なのでこちらから．
 
-レコードの一部を変更するにはレコード更新式を使います．`model`の`discarded`を`model.selected`にするので`{ model | discarded = model.selected }`です．
+レコードの一部を変更するには[レコード更新式](../#レコード更新式-式)を使います．`model`の`discarded`を`model.selected`にするので`{ model | discarded = model.selected }`です．
 
 n番目のselectedの更新も，レコード更新式の部分は同じです．こういう時はletを使って固まっている所から書きます．
 
@@ -931,7 +935,7 @@ listUpdateAt n value list =
 というわけで，捨てたことにした表示と捨て札確定ボタンを付けます．
 捨てたカードは，暫定的に「すてた」という表示にします．
 
-「すてた」の分岐を入れる箇所はいくつか候補がありますが，仮置きなので影響の少ない位置を改造します．`cardView`のカードを受け取る箇所を，カードと捨てたかどうかの組を受け取るようにします．
+「すてた」の分岐を入れる箇所はいくつか候補がありますが，仮置きなので影響の少ないところを改造します．`cardView`のカードを受け取る箇所を，カードと捨てたかどうかの組を受け取るようにします．
 
 …ところで，チェックボックスは選択されているかどうかを属性で持つ，ということを思い出しました．これも放り込むことにします．カード，選択されているか，捨てたかどうか，の3つ組です．（3要素なのでギリギリ許される）
 
