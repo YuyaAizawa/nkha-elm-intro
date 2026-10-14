@@ -1349,7 +1349,22 @@ styleタグに書き加えてCOMPILEしましょう．
 
 中央に大きなスートを薄く描いて，その上にランクを重ねたらもっと見栄えがしそうです．
 
-まずはCSSから選択できるようにスートとランクを別の要素にしてclassを付けます．
+まずはCSSから選択できるようにスートとランクを別の要素にしてclassを付けます．以下のようなHTMLを作ります．
+
+```html
+<label class="card">
+    <input ... />
+    <div class ="card-center">
+        <span class="suit"><span class="spade">♠</span></span>
+        <span class="rank">1</span>
+    </div>
+</label>
+```
+
+spanはインラインの汎用タグです．divに似ていますがブロックではないです．
+文中に置けるような，しかし区別はしたい範囲がspanです．divとの使い分けは，今回は絵を描いているだけなのでそんなに気にしなくても良いです．
+
+具体的なスートもclassにしましたが，これは♥♦は赤色にするためです．
 
 ```elm
 cardView : Int -> ( Card, Bool, Bool ) -> Html Msg
@@ -1359,7 +1374,9 @@ cardView n ( (Card suit rank), selected, discarded ) =
             if discarded then
                 [ span [] [ text <| "すてた" ] ]
             else
-                [ span [ Attr.class "suit" ] [ text <| suitToString suit ]
+                [ span [ Attr.class "suit" ]  -- class属性をつける
+                    [ span [ Attr.class <| suitToClass suit ] [ text <| suitToString suit ]
+                    ]
                 , span [ Attr.class "rank" ] [ text <| String.fromInt rank ]
                 ]
     in
@@ -1371,14 +1388,20 @@ cardView n ( (Card suit rank), selected, discarded ) =
                 ] []
             , div [ Attr.class "card-center" ] center
             ]
+
+suitToClass suit =  -- Suitを対応するclass名に変換
+    case suit of
+        Spade -> "spade"
+        Heart -> "heart"
+        Diamond -> "diamond"
+        Club -> "club"
 ```
 
-spanはインラインの汎用タグです．divに似ていますがブロックではないです．
-文中に置けるような，しかし区別はしたい範囲がspanです．
+span要素は対応するHtml.spanを使うだけで今まで通りです．
 
-divとの使い分けは，今回は絵を描いているのでそんなに気にしなくても良いです．
+`suitToClass`はSuitを対応するclass名に変換します．（`Model`の仲間か`view`の仲間か迷いますが，`view`固有の概念なので近くに置きました．）
 
-CSSは今回入れ子表記（「○○の子孫の～」に対応）にしてみました．
+後は飾り付けです．CSSは今回入れ子表記（「○○の子孫の～」に対応）で書いてみました．
 
 ```CSS
 .card {
@@ -1400,8 +1423,14 @@ CSSは今回入れ子表記（「○○の子孫の～」に対応）にして�
 
     .suit {
         font-size: 100px;
-        color: darkgray;
         transform: translate( 0, -5%);
+        /* スートの色 */
+        .spade, .club {
+            color: darkgray;
+        }
+        .heart, .diamond {
+            color: lightcoral;
+        }
     }
 
     .rank {
@@ -1411,7 +1440,7 @@ CSSは今回入れ子表記（「○○の子孫の～」に対応）にして�
 }
 ```
 
-文字を並べただけの見た目からはずいぶん良くなったのではないでしょうか．
+色味を確認するために，`[ Card Spade 1, Card Heart 2, Card Diamond 3, Card Club 4, Card Spade 5 ]`などを使って見てください．文字を並べただけの見た目からはずいぶん良くなったのではないでしょうか．
 
 ### カードめくりアニメーション
 
@@ -1454,7 +1483,7 @@ CSSは今回入れ子表記（「○○の子孫の～」に対応）にして�
 nを束縛できないので，地道に5枚それぞれ指定して，アニメーションの開始時間を遅らせています．
 
 かなりいい感じになってきましたね．
-フォントやアニメーションの微調整も楽しいですが，そろそろ「すてた」標示も気になるので，elmプログラミングに戻りましょう．
+フォントやアニメーションの微調整も楽しいですが，無限にこだわれる箇所なので，そろそろelmプログラミングに戻りましょう．
 
 :::details[カードめくりアニメーションまでのコード]
 ```elm
@@ -1504,7 +1533,7 @@ type alias Rank = Int
 
 initialModel : Model
 initialModel =
-    { hands = List.repeat 5 (Card Spade 1)
+    { hands = [ Card Spade 1, Card Heart 2, Card Diamond 3, Card Club 4, Card Spade 5 ]
     , selected = List.repeat 5 False
     , discarded = List.repeat 5 False
     }
@@ -1562,7 +1591,9 @@ cardView n ( (Card suit rank), selected, discarded ) =
             if discarded then
                 [ span [] [ text <| "すてた" ] ]
             else
-                [ span [ Attr.class "suit" ] [ text <| suitToString suit ]
+                [ span [ Attr.class "suit" ]
+                    [ span [ Attr.class <| suitToClass suit ] [ text <| suitToString suit ]
+                    ]
                 , span [ Attr.class "rank" ] [ text <| String.fromInt rank ]
                 ]
     in
@@ -1574,6 +1605,13 @@ cardView n ( (Card suit rank), selected, discarded ) =
                 ] []
             , div [ Attr.class "card-center" ] center
             ]
+
+suitToClass suit =
+    case suit of
+        Spade -> "spade"
+        Heart -> "heart"
+        Diamond -> "diamond"
+        Club -> "club"
 
 zip3 : List a -> List b -> List c -> List ( a, b, c )
 zip3 listA listB listC =
@@ -1634,8 +1672,14 @@ zip3 listA listB listC =
 
     .suit {
         font-size: 100px;
-        color: darkgray;
         transform: translate( 0, -5%);
+        /* 色 */
+        .spade, .club {
+            color: darkgray;
+        }
+        .heart, .diamond {
+            color: lightcoral;
+        }
     }
 
     .rank {
@@ -1655,14 +1699,447 @@ zip3 listA listB listC =
 ```
 :::
 
-:::coffee-break[Htmlのスタイル指定]
-ElmのHtmlにスタイルを指定する方法には，これまでやったCSSの他にもうひとつ，
-直接style属性を付けるというのがあります．コード上で直接`Attribute.style "background-color" "red"`のような属性を書けば，
+:::note[Htmlのスタイル指定]
+Htmlにスタイルを指定する方法には，これまでやったCSSの他にもうひとつ，
+直接style属性を付けるものがあります．
+コード上で直接`Attribute.style "background-color" "red"`のような属性を書けば，
 それがHTMLに反映されるため，CSSに依らずにスタイルを指定できます．
 
 この方法はElmから直接操作できるため柔軟な指定が可能な一方，
 制御するためのコードが煩雑になりがちです．
 基本的には，CSSにした方が整理されたコードを書きやすいでしょう．
 
-指定するスタイルが少なかったり，別にCSSファイルを作りたくないような場合は，直接のスタイル指定も覚えておくとよいかもしれません．
+指定するスタイルが少なかったり，別にCSSファイルを作りたくないような場合は，直接のスタイル指定の方が快適かもしれません．
+:::
+
+## カードを引き直す
+
+「すてた」という表記ができたので，その箇所を引き直します．
+
+### 山札を実装する
+
+引き直すためには山札が必要なので，最低限の実装をします．
+
+山札は，手札と同じゲームの状態なので，`Model`に追加します．
+
+山札は表示しないので今回は`view`から改造しません（開発用のviewを一時的に実装する手もアリですが）
+
+```
+type alias Model =
+    { deck : List Card  -- 山札
+    , hands : List Card
+    , selected : List Bool
+    , discarded : List Bool
+    }
+
+...
+
+initialModel : Model
+initialModel =
+    { deck = [(Card Heart 1), (Card Heart 2), (Card Heart 3), (Card Heart 4), (Card Heart 5)]
+    , hands = [(Card Spade 1), (Card Spade 2), (Card Spade 3), (Card Spade 4), (Card Spade 5)]
+    , selected = List.repeat 5 False
+    , discarded = List.repeat 5 False
+    }
+```
+
+引き直したカードがわかりやすいように，手札と山札で異なる色のものにします．
+
+### 引き直す
+
+selectedな手札をdiscardedにする代わりにdeckから補充します．これは`update`への変更です．
+
+`Msg`が`Discard`のときに`hands`と`deck`を更新するのですから，着地点はこんなイメージです．
+
+```elm
+update : Msg -> Model -> Model
+update msg model =
+    ...
+        Discard ->
+            let
+                newHands = ...
+                newDeck = ...
+            in
+                { model | hands = newHands, deck = newDeck }
+```
+
+`selected`の箇所を入れ替えた`newHands`と，引いた分減らした`newDeck`に更新するということです．
+
+簡単にやるには`hands`を`selected`でフィルターしてしまうのが思いつきます．
+
+```elm
+update : Msg -> Model -> Model
+update msg model =
+    ...
+        Discard ->
+            let
+                keeps =  -- 残す手札
+                    zip2 model.hands model.selected  -- ( ♠1, True ) のような要素
+                        |> List.filter (\( _, selected ) -> not selected)  -- 選択されていないものを残す
+                        |> List.map (\( card, _ ) -> card)  -- 不要なselectを除去
+                
+                drawNum = 5 - List.length keeps  -- 引く枚数
+
+                newHands =
+                    keeps ++ (model.deck |> List.take drawNum)  -- すてた数だけ追加
+
+                newDeck =
+                    model.deck |> List.drop drawNum -- 引いた分減らす
+            in
+                { model | hands = newHands, deck = newDeck }
+...
+
+zip2 : List a -> List b -> List ( a, b )
+zip2 =
+  List.map2 Tuple.pair  -- \a b -> ( a, b ) と同じだが公式が提供しているので使う
+```
+
+`List`の先頭数枚の取得や，その残りは`List.take`，`List.drop`でできるため，残すカード(keeps)を最初に求めます．
+`hands`と`selected`で同じインデックスの要素が対応しているため，`zip2`関数で`List ( Card, Bool )`にしてから，`List.filter`で選択されていないものを除き，`List.map`で`List Card`に戻します．
+
+残すカードが決まったら，後は決まった枚数を山札の先頭から手札に補充し，その分山札を減らします．
+
+ここまでで動かすと，捨てるカードの選択が残ることがわかります．`selected`クリアも追加しましょう．
+discardedはもはや必要ありません．
+
+```elm
+type alias Model =
+    { deck : List Card
+    , hands : List Card
+    , selected : List Bool
+    -- , discarded : List Bool
+    }
+
+initialModel : Model
+initialModel =
+    { deck = [(Card Heart 1), (Card Heart 2), (Card Heart 3), (Card Heart 4), (Card Heart 5)]
+    , hands = [(Card Spade 1), (Card Spade 2), (Card Spade 3), (Card Spade 4), (Card Spade 5)]
+    , selected = List.repeat 5 False
+    -- , discarded = List.repeat 5 False
+    }
+
+...
+
+update : Msg -> Model -> Model
+update msg model =
+    ...
+        Discard ->
+            let
+                keeps =
+                    zip2 model.hands model.selected
+                        |> List.filter (\( _, selected ) -> not selected)
+                        |> List.map (\( card, _ ) -> card)
+                
+                drawNum = 5 - List.length keeps
+
+                newHands =
+                    keeps ++ (model.deck |> List.take drawNum)
+
+                newDeck =
+                    model.deck |> List.drop drawNum
+            in
+                -- { model | hands = newHands, deck = newDeck }
+                { model | deck = newDeck, hands = newHands, selected = List.repeat 5 False }
+```
+
+viewからもdiscardedを取り除き，捨て札（仮）は無くなりました．
+
+```elm
+view : Model -> Html Msg
+-- view { hands, selected, discarded } =
+view { hands, selected } =
+    let
+        cards =
+            -- zip3 hands selected discarded
+            zip2 hands selected
+                |> List.indexedMap cardView
+    in
+        div []
+            [ div [ Attr.class "card-list" ] cards
+            , button [ onClick Discard ] [ text "すてる" ]
+            ]
+
+-- cardView : Int -> ( Card, Bool, Bool ) -> Html Msg
+-- cardView n ( (Card suit rank), selected, discarded ) =
+cardView : Int -> ( Card, Bool ) -> Html Msg
+cardView n ( (Card suit rank), selected ) =
+    let
+        center =
+            -- if discarded then
+            --    [ span [] [ text <| "すてた" ] ]
+            -- else
+            [ span [ Attr.class "suit" ]
+                [ span [ Attr.class <| suitToClass suit ] [ text <| suitToString suit ]
+                ]
+            , span [ Attr.class "rank" ] [ text <| String.fromInt rank ]
+            ]
+    in
+        label [ Attr.class "card" ]
+            [ input
+                [ Attr.type_ "checkbox"
+                , Attr.checked selected
+                , onCheck <| Select n
+                ] []
+            , div [ Attr.class "card-center" ] center
+            ]
+```
+
+これで引き直しができました．
+
+残したカードが手札左側に集まってしまうのが気になる人は直してください．
+みなさん気になりますよね？はい，演習です．
+
+### 演習 位置を維持した引き直し
+
+カードとそれが引き直し選択されているかの組のリストと，山札を引数に取り，
+引き直し後の手札と山札の組を返す関数，  
+`draw : ( Card, Bool ) -> List Card -> ( List Card, List Card )`  
+を記述せよ．
+ただし，選択されなかったカードのリスト内での位置は変えないものとする．
+
+:::answer[解答例]
+```elm
+draw : List ( Card, Bool ) -> List Card -> ( List Card, List Card )
+draw hands deck =
+    drawHelp hands deck []
+
+drawHelp : List ( Card, Bool ) -> List Card -> List Card -> ( List Card, List Card )
+drawHelp hands deck result =
+    case hands of
+        [] ->  -- 処理すべき残り手札無し
+            ( result |> List.reverse, deck )
+
+        ( card, False ) :: rest ->  -- この手札は選択されていない
+            drawHelp rest deck (card :: result)
+
+        ( _, True ) :: rest ->  -- この手札は選択されている
+            drawHelp rest (List.drop 1 deck) (List.take 1 deck ++ result)
+```
+:::
+
+### 引き直しアニメーション
+
+新しく引いたカードにめくりアニメーションが適用されないことが疑問かもしれません．
+これにはVirtual DOMという機能が関係しています．
+
+Elmのプログラムから見ると，view関数で毎回新しいHtmlのノードが生成されるようにみえますが，
+毎回全てがブラウザに知らせられるのではありません．
+効率化のために，内部で前回のHtmlを保持し，差分の検出が行われます．
+
+この差分検出のために，Cardは中身が変わってもdivは変っていないと判定され，アニメーションしないのです．
+divが異なったものになったと明示すればアニメーションは再度行われます．
+
+これを実現するのが，子要素に識別用の文字列を付加する，[Html.Keyed.node](https://package.elm-lang.org/packages/elm/html/1.0.1/Html-Keyed#node)です．
+
+`node : String -> List (Attribute msg) -> List ( String, Html msg ) -> Html msg`という型をもち，いつものHtmlと異なるのは`String`の2箇所です．
+1つ目は要素の種類(`div`など)を指定し，後者は子要素とそれを識別する文字列を入れます．
+
+例えば，カード内容ごとに識別するなら以下のようになります．
+```
+import Html.Keyed as Keyed
+
+...
+
+view : Model -> Html Msg
+view { hands, selected } =
+    let
+        cards =
+            zip2 hands selected
+                |> List.indexedMap cardView
+    in
+        div []
+            [ Keyed.node "div" [ Attr.class "card-list" ] cards  -- card-listの子を識別する
+            , button [ onClick Discard ] [ text "すてる" ]
+            ]
+
+cardView : Int -> ( Card, Bool ) -> ( String, Html Msg )  -- 識別用文字列とHtml
+cardView n ( (Card suit rank), selected ) =
+    let
+        id = suitToClass suit ++ String.fromInt rank
+
+        center =
+            [ span [ Attr.class "suit" ]
+                [ span [ Attr.class <| suitToClass suit ] [ text <| suitToString suit ]
+                ]
+            , span [ Attr.class "rank" ] [ text <| String.fromInt rank ]
+            ]
+    in
+        ( id
+        , label [ Attr.class "card" ]
+            [ input
+                [ Attr.type_ "checkbox"
+                , Attr.checked selected
+                , onCheck <| Select n
+                ] []
+            , div [ Attr.class "card-center" ] center
+            ]
+        )
+
+...
+```
+
+:::details[引き直しまでのコード]
+```elm
+module Main exposing (main)
+
+import Browser
+import Html exposing (..)
+import Html.Attributes as Attr
+import Html.Events exposing (onCheck, onClick)
+import Html.Keyed as Keyed
+
+
+main =
+    Browser.sandbox
+        { init = initialModel
+        , view = view
+        , update = update
+        }
+
+
+
+-----------
+-- MODEL --
+-----------
+
+type alias Model =
+    { deck : List Card
+    , hands : List Card
+    , selected : List Bool
+    }
+
+type Card = Card Suit Rank
+
+type Suit
+    = Spade
+    | Heart
+    | Diamond
+    | Club
+
+suitToString suit =
+    case suit of
+        Spade -> "♠"
+        Heart -> "♥"
+        Diamond -> "♦"
+        Club -> "♣"
+
+type alias Rank = Int
+
+initialModel : Model
+initialModel =
+    { deck = [(Card Heart 1), (Card Heart 2), (Card Heart 3), (Card Heart 4), (Card Heart 5)]
+    , hands = [(Card Spade 1), (Card Spade 2), (Card Spade 3), (Card Spade 4), (Card Spade 5)]
+    , selected = List.repeat 5 False
+    }
+
+
+
+------------
+-- UPDATE --
+------------
+
+type Msg
+    = Select Int Bool
+    | Discard
+
+update : Msg -> Model -> Model
+update msg model =
+    case msg of
+        Select n value ->
+            let
+                newSelected = 
+                    model.selected
+                        |> listUpdateAt n value
+            in
+                { model | selected = newSelected }
+
+        Discard ->
+            let
+                ( newHands, newDeck ) = draw (zip2 model.hands model.selected) model.deck
+            in
+                { model | deck = newDeck, hands = newHands, selected = List.repeat 5 False }
+
+draw : List ( Card, Bool ) -> List Card -> ( List Card, List Card )
+draw hands deck =
+    drawHelp hands deck []
+
+drawHelp : List ( Card, Bool ) -> List Card -> List Card -> ( List Card, List Card )
+drawHelp hands deck result =
+    case hands of
+        [] ->  -- 処理すべき残り手札無し
+            ( result |> List.reverse, deck )
+
+        ( card, False ) :: rest ->  -- この手札は選択されていない
+            drawHelp rest deck (card :: result)
+
+        ( _, True ) :: rest ->  -- この手札は選択されている
+            drawHelp rest (List.drop 1 deck) (List.take 1 deck ++ result)
+
+
+
+----------
+-- VIEW --
+----------
+
+view : Model -> Html Msg
+view { hands, selected } =
+    let
+        cards =
+            zip2 hands selected
+                |> List.indexedMap cardView
+    in
+        div []
+            [ Keyed.node "div" [ Attr.class "card-list" ] cards
+            , button [ onClick Discard ] [ text "すてる" ]
+            ]
+
+cardView : Int -> ( Card, Bool ) -> ( String, Html Msg )
+cardView n ( (Card suit rank), selected ) =
+    let
+        id = suitToClass suit ++ String.fromInt rank
+
+        center =
+            [ span [ Attr.class "suit" ]
+                [ span [ Attr.class <| suitToClass suit ] [ text <| suitToString suit ]
+                ]
+            , span [ Attr.class "rank" ] [ text <| String.fromInt rank ]
+            ]
+    in
+        ( id
+        , label [ Attr.class "card" ]
+            [ input
+                [ Attr.type_ "checkbox"
+                , Attr.checked selected
+                , onCheck <| Select n
+                ] []
+            , div [ Attr.class "card-center" ] center
+            ]
+        )
+
+suitToClass suit =
+    case suit of
+        Spade -> "spade"
+        Heart -> "heart"
+        Diamond -> "diamond"
+        Club -> "club"
+
+
+
+-------------
+-- UTILITY --
+-------------
+
+listUpdateAt : Int -> a -> List a -> List a
+listUpdateAt n value list =
+    list
+        |> List.indexedMap (\idx a -> if idx == n then value else a)
+
+zip2 : List a -> List b -> List ( a, b )
+zip2 =
+    List.map2 Tuple.pair
+
+zip3 : List a -> List b -> List c -> List ( a, b, c )
+zip3 =
+    List.map3 (\a b c -> ( a, b, c ))
+```
 :::
