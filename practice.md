@@ -1893,7 +1893,7 @@ cardView n ( (Card suit rank), selected ) =
 
 カードとそれが引き直し選択されているかの組のリストと，山札を引数に取り，
 引き直し後の手札と山札の組を返す関数，  
-`draw : ( Card, Bool ) -> List Card -> ( List Card, List Card )`  
+`draw : List ( Card, Bool ) -> List Card -> ( List Card, List Card )`  
 を記述せよ．
 ただし，選択されなかったカードのリスト内での位置は変えないものとする．
 
@@ -1934,7 +1934,8 @@ divが異なったものになったと明示すればアニメーションは�
 `node : String -> List (Attribute msg) -> List ( String, Html msg ) -> Html msg`という型をもち，いつものHtmlと異なるのは`String`の2箇所です．
 1つ目は要素の種類(`div`など)を指定し，後者は子要素とそれを識別する文字列を入れます．
 
-例えば，カード内容ごとに識別するなら以下のようになります．
+例えば，カードを識別するなら，card-listを`node "div"`でとして，子要素を`[("♠1", <♠1のCardのHtml>), ...]`とします．
+
 ```
 import Html.Keyed as Keyed
 
@@ -1977,6 +1978,13 @@ cardView n ( (Card suit rank), selected ) =
 
 ...
 ```
+
+[Html.Keyed](https://package.elm-lang.org/packages/elm/html/1.0.1/Html-Keyed)の専用要素が`ul`と`ol`のみであるように，card-listも意味的にはdivよりulが相応しいかもしれません．
+
+ここまでで引き直しは完成です．
+
+現状は，何度も手札を捨てると山札が無くなってしまいますし，なによりシャッフルされていません．
+次は山札をシャッフルしましょう．
 
 :::details[引き直しまでのコード]
 ```elm
@@ -2143,3 +2151,134 @@ zip3 =
     List.map3 (\a b c -> ( a, b, c ))
 ```
 :::
+
+
+
+## 山札をシャッフルする
+
+山札のシャッフルのために乱数を扱います．
+
+Elmで乱数を扱う方法は大きく分けて3つあります．
+
+1. Elm内で自分で生成
+2. [Random](https://package.elm-lang.org/packages/elm/random/latest/Random)モジュールを利用してフレームワークと連携
+3. JavaScriptで生成したものをportsで受け渡し
+
+2, 3は`Browser.sandbox`では使えません．
+
+正攻法は2ですが，理解を深めるためにあえて1からやっていきましょう！
+
+乱数といっても，{決定論的/deterministic}な演算から真のランダムを得ることはもちろん出来ません．
+今回はいい感じにランダムっぽい数値を作り出せる擬似乱数を使います．
+
+### Xorshift
+
+擬似乱数の実装として，実装が極めて単純で，その割に性能が良いことで有名な[Xorshift](https://www.jstatsoft.org/v08/i14/paper)を使います．
+
+以下のコードで動作確認出来ます．
+
+**XorshiftのElm実装**  
+```elm
+module Main exposing (main)
+
+import Bitwise
+import Browser
+import Html exposing (..)
+import Html.Attributes as Attr
+import Html.Events exposing (onInput, onClick)
+
+
+
+next : Int -> Int
+next x =
+    let
+      y = x |> Bitwise.shiftLeftBy 13 |> Bitwise.xor x
+      z = y |> Bitwise.shiftRightBy 17 |> Bitwise.xor y
+    in
+      z |> Bitwise.shiftLeftBy 5 |> Bitwise.xor z
+
+
+
+main : Program () Model Msg
+main =
+    Browser.sandbox
+        { init = 0
+        , view = view
+        , update = update
+        }
+
+type alias Model = Int
+
+type Msg
+    = SeedChanged String
+    | Next
+
+update : Msg -> Model -> Model
+update msg model =
+    case msg of
+        SeedChanged str ->
+            str
+                |> String.toInt
+                |> Maybe.withDefault 0
+        Next ->
+            next model
+
+view : Model -> Html Msg
+view model =
+    div []
+        [ input
+            [ Attr.type_ "number"
+            , Attr.value <| String.fromInt model
+            , onInput SeedChanged
+            ] []
+        , button [ onClick Next ] [ text "next" ]
+        ]
+```
+
+0以外の整数を入力して"next"ボタンを押すと，押すたびに異なる整数が出力されます．
+
+この動作を実現しているのは，関数`next : Int -> Int`です．現在の数を取って次の数を返します．
+
+2の32乗-1の整数をいい感じに一筆書きできる関数が，論文4ページ目の短いC言語のコードで実現できる素晴らしい発見です．
+
+この関数は乱数を出力してくれますが，seedの入力が必要することに気を付けてください．
+
+**Elmで自作乱数を利用するためのイメージ**  
+```
+seed
+
+|  ^ /--> random
+|  |/
+v  |
+
+next
+```
+
+Elmは暗黙に状態を持てないため，ランダムな何かを得る関数はseedも共に返すことになります．
+
+### ランダムなIntからランダムなCard
+
+さっそく乱数を組込みましょう．
+先ほどの関数`next : Int -> Int`では`Int`しか作れないので，`Int -> Card`を作ります．
+
+4で余りをとって`suit`，4で割ったあと13で余りをとって`rank`とするのが簡便です．
+
+**intToCard**  
+```elm
+intToCard : Int -> Card
+intToCard x =
+    let
+        suit =
+            case modBy 4 x of
+                0 -> Spade
+                1 -> Heart
+                2 -> Diamond
+                _ -> Club
+        rank =
+            x // 4
+            |> modBy 13
+            |> \y -> y - 1
+    in
+        Card suit rank
+
+```
