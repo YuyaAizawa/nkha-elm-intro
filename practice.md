@@ -2168,8 +2168,9 @@ Elmで乱数を扱う方法は大きく分けて3つあります．
 
 正攻法は2ですが，理解を深めるためにあえて1からやっていきましょう！
 
-乱数といっても，{決定論的/deterministic}な演算から真のランダムを得ることはもちろん出来ません．
-今回はいい感じにランダムっぽい数値を作り出せる擬似乱数を使います．
+乱数といっても，{決定論的/deterministic}な演算で真のランダムを得ることはもちろん出来ません．
+今回はいい感じにランダムっぽい数値を作り出せる擬似乱数を作ります．
+毎回「疑似」とつけるのは面倒なので，以降ただ「乱数」と呼びます．
 
 ### Xorshift
 
@@ -2237,11 +2238,15 @@ view model =
 
 0以外の整数を入力して"next"ボタンを押すと，押すたびに異なる整数が出力されます．
 
-この動作を実現しているのは，関数`next : Int -> Int`です．現在の数を取って次の数を返します．
-
-2の32乗-1の整数をいい感じに一筆書きできる関数が，論文4ページ目の短いC言語のコードで実現できる素晴らしい発見です．
+乱数生成をしている関数は`next : Int -> Int`です．現在の数をseed（乱数の"種"）として取って次の数を返します．
+返された数を次の`next`の引数にすることを繰り返すと，2の32乗-1種類の整数をいい感じに一筆書きしてくれます．
+（これが論文4ページ目の短いC言語のコードで実現できてしまう，素晴らしい発見です．）
 
 この関数は乱数を出力してくれますが，seedの入力が必要することに気を付けてください．
+
+### 乱数の型
+
+Elmは暗黙に状態を持てないため，ランダムな何かを得る関数はseedも共に返すことになります．
 
 **Elmで自作乱数を利用するためのイメージ**  
 ```
@@ -2254,31 +2259,252 @@ v  |
 next
 ```
 
-Elmは暗黙に状態を持てないため，ランダムな何かを得る関数はseedも共に返すことになります．
+seedは他の`Int`と混ざらないようにカスタム型にし，
+seedも合わせて返すことが分かりやすいように`Random`型も定義します．
+`Random a`はランダムな`a`を得るための型です．
 
-### ランダムなIntからランダムなCard
-
-さっそく乱数を組込みましょう．
-先ほどの関数`next : Int -> Int`では`Int`しか作れないので，`Int -> Card`を作ります．
-
-4で余りをとって`suit`，4で割ったあと13で余りをとって`rank`とするのが簡便です．
-
-**intToCard**  
 ```elm
-intToCard : Int -> Card
-intToCard x =
-    let
-        suit =
-            case modBy 4 x of
-                0 -> Spade
-                1 -> Heart
-                2 -> Diamond
-                _ -> Club
-        rank =
-            x // 4
-            |> modBy 13
-            |> \y -> y - 1
-    in
-        Card suit rank
-
+type Seed = Seed Int
+type alias Rand a = Seed -> ( a, Seed )
 ```
+
+`Seed Int`というコンストラクタで`Int`を包むことで，`Int`とは異なる型として扱われます．
+モジュールを作るときはコンストラクタを公開しなければ，他のモジュールでは分解できない`Seed`型になります．
+（このような1要素をラップするだけのコンストラクタは，最適化で除去されるため，パフォーマンスを気にせず気軽に使えるテクニックです．）
+
+一方，ただの関数としても扱いたい`Rand a`はaliasとしています．
+`a`は上の[図](#Elmで自作乱数を利用するためのイメージ)のrandomに対応する型です．
+
+これらを利用して，例えば，最大値を指定して整数を取得する関数は以下のように記述できます．
+
+**最大値を指定したランダムな整数**  
+```elm
+nextIntWithLimit : Int -> Rand Int
+nextIntWithLimit excl =
+    \(Seed seed) =
+        let
+            seed_ = next seed
+            result = modBy excl seed_
+        in
+            ( result, Seed seed_ )
+```
+
+seedの中身`seed`を取り出して次の`seed_`を求め，剰余算で要求された乱数を求めて，組にして返します．
+0が出ないのと，剰余算で僅かに偏りが出ますが，今回はこれでよしとしましょう．
+
+`excl`は"exclusive"（境界を含まない）の短縮形です．
+画面解像度の大きく，入力補完もある現代において短縮形は避けるべきと言われますが，
+とりさんは長すぎるのも読みにくいと思っているので気分で縮めます．
+
+以上でもう問題はないのですが，よりキレイに関数をまとめるために，2つのユーティリティを追加します．
+
+**Randのユーティリティ**  
+```elm
+constant : a -> Rand a
+constant value =
+    \seed -> ( value, seed )
+
+andThen : (a -> Rand b) -> Rand a -> Rand b
+andThen f rand =
+    \seed ->
+        let
+            ( a, nextSeed ) =
+                rand seed
+        in
+        f a nextSeed
+```
+
+`constant`は見た通り，seedを使わずに定数を返します．
+単体で使うことは少ないですが，`List`の再帰関数における`[]`パターンのような立ち位置ですので，とりあえず入れておいてください．
+
+`andThen`は一見分かりにくいですが，`Rand a`(乱数で何かを得る関数)から，`Rand b`(別の何か得る関数)を作るためのものです．これは例を見た方がわかりやすいので，[最大値を指定したランダムな整数](#最大値を指定したランダムな整数)を書き換えます．
+
+**最大値を指定したランダムな整数 andThen**  
+```elm
+nextInt : Rand Int
+nextInt (Seed seed) =
+    let
+        seed_ = next seed
+    in
+        ( seed_, Seed seed_ )
+
+nextIntWithLimit : Int -> Rand Int
+nextIntWithLimit excl =
+    nextInt
+        |> andThen (\n ->  modBy excl n |> constant)
+```
+
+(0を除く)Int全体から乱数を得る`nextInt`と，それを利用して最大値(境界を含まない)を指定できるようにした`nextIntWithLimit`に分解することができました．
+
+`andThen`の引数は，「乱数で`n`が出たら，剰余を取ったものを必ず返す(constant)`Rand`をつくる」ラムダ式です．
+更新した`seed_`が明示的に登場しないので，誤って更新前の`seed`を返してしまうミスが防げます．
+
+
+また，今回の用途にはややオーバースペックですが，`Rand`を返せるので，`n`の内容で分岐してさらに乱数を引くような使い方もできます．
+`andThen`はこのように「乱数を得たらそれを利用して…」という，ある種手続きのような書き味を可能にします．
+
+一度得た乱数で充分，分岐などしないという場合は，`map`も作っておくとよいかもしれません．
+
+```elm
+map : (a -> b) -> Rand a -> Rand b
+map f =
+    andThen (\a -> f a |> constant)
+```
+
+:::coffee-break[Randomとモナド]
+「[乱数のユーティリティ](#Randのユーティリティ)なんて思いつかない」という人もいるかもしれませんが，頻出のパターンなので実は暗記でいけます．Elmでは主に`andThen`の名前で出現します．（[List.concatMap](https://package.elm-lang.org/packages/elm/core/latest/List#concatMap), [Meybe.andThen](https://package.elm-lang.org/packages/elm/core/latest/Maybe#andThen), [Json.Decode.Decoder.andThen](https://package.elm-lang.org/packages/elm/json/latest/Json-Decode#andThen)など）
+
+型に着目すると，どの関数も`(a -> M b) -> M a -> M b`の共通点がありますね？
+この形を作っておくと収まりが良いことが知られています．
+Haskellではこの形を関数を持つ`M`を，型クラス`Monad`と名付けています．
+
+`Monad`はこのほかに，Randのユーティリティの`constant : a -> Rand a`にあたる関数も要求する型クラスで，それぞれの関数に，`bind`, `pure`と名前が付いています．
+`bind`と`pure`を用意することで，`map : (a -> b) -> Rand a -> Rand b`にあたる関数などが自動で定義されます．
+それほど`(a -> M b) -> M a -> M b`の形は便利なので，見つけたら積極的に切り出しておきましょう．
+
+`Monad`は強力ですが，Elmはあえてそこまで抽象化しない，分かりやすさ重視の方針をとっているので，使いこなせなくても大丈夫です．
+関数のいい感じの切れ目になるかもしれない，ということだけ覚えておいてください．
+:::
+
+### ランダムなIntでシャッフル
+
+並んだカードを一枚ずつ，ランダムなインデックスを選んで山札に加えることを繰り返して，シャッフルされた山札を得ます．
+
+**Listのシャッフル 自前random**  
+```elm
+shuffle : List a -> Rand (List a)
+shuffle list =
+    shuffleHelp list []
+
+shuffleHelp : List a -> List a -> Rand (List a)
+shuffleHelp rest result =
+    case rest of
+        [] ->
+            constant result
+        _ ->
+            nextIntWithLimit (List.length rest)
+                |> andThen (\idx ->
+                    case pick idx rest of
+                        Nothing ->  -- never happen
+                            \_ -> ( [], Seed 0 )
+                        Just ( x, xs ) ->
+                            shuffleHelp xs (x :: result)  -- 選んだインデックスの要素をresultに加える
+                )
+
+pick : Int -> List a -> Maybe ( a, List a )  -- インデックスが正しいとき Just ( indexの要素, 残りのリスト )
+pick idx xs =
+    case ( idx, xs ) of
+        ( 0, x :: rest ) ->  -- 取り出すindexのとき
+            Just ( x, rest )
+
+        ( _, x :: rest ) ->  -- 取り出すindex以外のとき
+            pick (idx - 1) rest  -- 先を調べる
+                |> Maybe.map (\( y, ys ) -> ( y, x :: ys )) -- この要素は残りリストに
+
+        _ -> -- インデックスが不正
+            Nothing
+```
+
+:::details[List.foldl版]
+```elm
+shuffleStep : ( List a, List a ) -> Rand ( List a, List a )
+shuffleStep ( rest, result ) =
+    case rest of
+        [] ->
+            constant ( rest, result )
+        _ ->
+            nextIntWithLimit (List.length rest)
+                |> andThen (\idx ->
+                    case pick idx rest of
+                        Nothing ->  -- never happen
+                            \_ -> ( ( [], [] ), Seed 0 )
+                        Just ( x, xs ) ->
+                            constant ( xs, x :: result )
+                )
+
+shuffleFold : List a -> Rand (List a)
+shuffleFold list =
+    List.foldl
+        (\_ rand -> rand |> andThen shuffleStep)
+        (constant ( list, [] ))
+        list
+    |> map Tuple.second
+```
+
+`shuffleFold`の最後で，`( result, [] )`から`result`を取り出す`map`が難しいとこですね．
+:::
+
+### 山札の補充
+
+では作った関数で山札の補充をしましょう．
+
+`Model`に`seed`を追加し，新品を用意する`freshDeck : List Card`と，`model`にシャッフルして補充する`refill : Model -> Model`を用意します．
+
+```elm
+type alias Model =
+    { deck : List Card
+    , hands : List Card
+    , selected : List Bool
+    , seed : Seed  -- 乱数の種
+    }
+
+initialModel : Model
+initialModel =
+    { deck = [(Card Heart 1), (Card Heart 2), (Card Heart 3), (Card Heart 4), (Card Heart 5)]
+    , hands = [(Card Spade 1), (Card Spade 2), (Card Spade 3), (Card Spade 4), (Card Spade 5)]
+    , selected = List.repeat 5 False
+    , seed = Seed 42
+    }
+
+freshDeck : List Card
+freshDeck =
+    [ Spade, Heart, Diamond, Club ]
+        |> List.concatMap (\suit ->
+            List.range 1 13
+                |> List.map (\rank -> Card suit rank)
+        )
+
+refill : Model -> Model
+refill model =
+    let
+        ( shuffled , nextSeed ) = shuffle freshDeck model.seed
+    in
+        { model | deck = model.deck ++ shuffled, seed = nextSeed }
+```
+
+カードを捨てるときに，足りなかったら補充するようにします．
+
+```elm
+update : Msg -> Model -> Model
+update msg model =
+    case msg of
+
+        ...
+
+        Discard ->
+            let
+                keeps =
+                    zip2 model.hands model.selected
+                        |> List.filter (\( _, selected ) -> not selected)
+                        |> List.map (\( card, _ ) -> card)
+                
+                drawNum = 5 - List.length keeps
+                
+                model_ =  -- 必要なら山札を補充
+                    if List.length model.deck < drawNum then
+                        refill model
+                    else
+                        model
+                
+                newHands =
+                    keeps ++ (model_.deck |> List.take drawNum)
+
+                newDeck =
+                    model_.deck |> List.drop drawNum
+            in
+                { model_ | hands = newHands, deck = newDeck, selected = List.repeat 5 False }
+```
+
+### seed入力画面
+
+to be written
