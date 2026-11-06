@@ -104,6 +104,10 @@ body {
     }
   }
 
+  pre code {
+    font-family: "M PLUS 1 Code", monospace;
+  }
+
   /** たためる要素 **/
   details.answer,
   details.details,

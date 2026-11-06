@@ -1934,29 +1934,17 @@ divが異なったものになったと明示すればアニメーションは�
 `node : String -> List (Attribute msg) -> List ( String, Html msg ) -> Html msg`という型をもち，いつものHtmlと異なるのは`String`の2箇所です．
 1つ目は要素の種類(`div`など)を指定し，後者は子要素とそれを識別する文字列を入れます．
 
-例えば，カードを識別するなら，card-listを`node "div"`でとして，子要素を`[("♠1", <♠1のCardのHtml>), ...]`とします．
+例えば，カードを識別するなら，~~card-listを`node "div"`として，子要素を`[("♠1", <♠1のCardのHtml>), ...]`とします．~~それぞれのカードを`Keyed.node "div"`でラップします．（Keyed.nodeは子要素の変更を検知出来ますが，[変更が無くても変更されたと見做すことがある](https://github.com/elm/virtual-dom/blob/master/src/Elm/Kernel/VirtualDom.js#L1042)からです）
 
-```
+```elm
 import Html.Keyed as Keyed
 
 ...
 
-view : Model -> Html Msg
-view { hands, selected } =
-    let
-        cards =
-            zip2 hands selected
-                |> List.indexedMap cardView
-    in
-        div []
-            [ Keyed.node "div" [ Attr.class "card-list" ] cards  -- card-listの子を識別する
-            , button [ onClick Discard ] [ text "すてる" ]
-            ]
-
-cardView : Int -> ( Card, Bool ) -> ( String, Html Msg )  -- 識別用文字列とHtml
+cardView : Int -> ( Card, Bool ) -> Html Msg
 cardView n ( (Card suit rank), selected ) =
     let
-        id = suitToClass suit ++ String.fromInt rank
+        id = String.fromInt n ++ suitToClass suit ++ String.fromInt rank  -- 識別に使う文字列
 
         center =
             [ span [ Attr.class "suit" ]
@@ -1964,19 +1952,32 @@ cardView n ( (Card suit rank), selected ) =
                 ]
             , span [ Attr.class "rank" ] [ text <| String.fromInt rank ]
             ]
+
+        card =
+            ( id  -- 識別に使う文字列
+            , label [ Attr.class "card" ]
+                [ input
+                    [ Attr.type_ "checkbox"
+                    , Attr.checked selected
+                    , onCheck <| Select n
+                    ] []
+                , div [ Attr.class "card-center" ] center
+                ]
+            )
     in
-        ( id
-        , label [ Attr.class "card" ]
-            [ input
-                [ Attr.type_ "checkbox"
-                , Attr.checked selected
-                , onCheck <| Select n
-                ] []
-            , div [ Attr.class "card-center" ] center
-            ]
-        )
+        Keyed.node "div" [ Attr.class "card-slot" ] [ card ]  -- Keyed.nodeでラップ
 
 ...
+```
+
+階層構造の変更に合せてディレイ用のcssも変更が必要です．
+
+```css
+.card-slot:nth-child(1) .card { animation-delay:  400ms; }
+.card-slot:nth-child(2) .card { animation-delay:  600ms; }
+.card-slot:nth-child(3) .card { animation-delay:  800ms; }
+.card-slot:nth-child(4) .card { animation-delay: 1000ms; }
+.card-slot:nth-child(5) .card { animation-delay: 1200ms; }
 ```
 
 [Html.Keyed](https://package.elm-lang.org/packages/elm/html/1.0.1/Html-Keyed)の専用要素が`ul`と`ol`のみであるように，card-listも意味的にはdivよりulが相応しいかもしれません．
@@ -2097,11 +2098,11 @@ view { hands, selected } =
                 |> List.indexedMap cardView
     in
         div []
-            [ Keyed.node "div" [ Attr.class "card-list" ] cards
+            [ div [ Attr.class "card-list" ] cards
             , button [ onClick Discard ] [ text "すてる" ]
             ]
 
-cardView : Int -> ( Card, Bool ) -> ( String, Html Msg )
+cardView : Int -> ( Card, Bool ) -> Html Msg
 cardView n ( (Card suit rank), selected ) =
     let
         id = suitToClass suit ++ String.fromInt rank
@@ -2112,17 +2113,20 @@ cardView n ( (Card suit rank), selected ) =
                 ]
             , span [ Attr.class "rank" ] [ text <| String.fromInt rank ]
             ]
+
+        card = 
+            ( id
+            , label [ Attr.class "card" ]
+                [ input
+                    [ Attr.type_ "checkbox"
+                    , Attr.checked selected
+                    , onCheck <| Select n
+                    ] []
+                , div [ Attr.class "card-center" ] center
+                ]
+            )
     in
-        ( id
-        , label [ Attr.class "card" ]
-            [ input
-                [ Attr.type_ "checkbox"
-                , Attr.checked selected
-                , onCheck <| Select n
-                ] []
-            , div [ Attr.class "card-center" ] center
-            ]
-        )
+        Keyed.node "div" [ Attr.class "card-slot" ] [ card ]
 
 suitToClass suit =
     case suit of
@@ -2505,6 +2509,986 @@ update msg model =
                 { model_ | hands = newHands, deck = newDeck, selected = List.repeat 5 False }
 ```
 
-### seed入力画面
+:::details[山札の補充までの.elm]
+```elm
+module Main exposing (main)
 
-to be written
+import Bitwise
+import Browser
+import Html exposing (..)
+import Html.Attributes as Attr
+import Html.Events exposing (onCheck, onClick)
+import Html.Keyed as Keyed
+
+
+main =
+    Browser.sandbox
+        { init = initialModel
+        , view = view
+        , update = update
+        }
+
+
+
+-----------
+-- MODEL --
+-----------
+
+type alias Model =
+    { deck : List Card
+    , hands : List Card
+    , selected : List Bool
+    , seed : Seed  -- 乱数の種
+    }
+
+type Card = Card Suit Rank
+
+type Suit
+    = Spade
+    | Heart
+    | Diamond
+    | Club
+
+suitToString suit =
+    case suit of
+        Spade -> "♠"
+        Heart -> "♥"
+        Diamond -> "♦"
+        Club -> "♣"
+
+type alias Rank = Int
+
+initialModel : Model
+initialModel =
+    { deck = [(Card Heart 1), (Card Heart 2), (Card Heart 3), (Card Heart 4), (Card Heart 5)]
+    , hands = [(Card Spade 1), (Card Spade 2), (Card Spade 3), (Card Spade 4), (Card Spade 5)]
+    , selected = List.repeat 5 False
+    , seed = Seed 42
+    }
+
+freshDeck : List Card
+freshDeck =
+    [ Spade, Heart, Diamond, Club ]
+        |> List.concatMap (\suit ->
+            List.range 1 13
+                |> List.map (\rank -> Card suit rank)
+        )
+
+
+
+------------
+-- UPDATE --
+------------
+
+type Msg
+    = Select Int Bool
+    | Discard
+
+update : Msg -> Model -> Model
+update msg model =
+    case msg of
+        Select n value ->
+            let
+                newSelected = 
+                    model.selected
+                        |> listUpdateAt n value
+            in
+                { model | selected = newSelected }
+
+        Discard ->
+            let
+                drawNum =
+                    model.selected
+                        |> List.filter identity
+                        |> List.length
+                
+                model_ =
+                    if drawNum > List.length model.deck then
+                        refill model
+                    else
+                        model
+                
+                ( newHands, newDeck ) = draw (zip2 model_.hands model_.selected) model_.deck
+            in
+                { model_ | deck = newDeck, hands = newHands, selected = List.repeat 5 False }
+
+draw : List ( Card, Bool ) -> List Card -> ( List Card, List Card )
+draw hands deck =
+    drawHelp hands deck []
+
+drawHelp : List ( Card, Bool ) -> List Card -> List Card -> ( List Card, List Card )
+drawHelp hands deck result =
+    case hands of
+        [] ->  -- 処理すべき残り手札無し
+            ( result |> List.reverse, deck )
+
+        ( card, False ) :: rest ->  -- この手札は選択されていない
+            drawHelp rest deck (card :: result)
+
+        ( _, True ) :: rest ->  -- この手札は選択されている
+            drawHelp rest (List.drop 1 deck) (List.take 1 deck ++ result)
+
+refill : Model -> Model
+refill model =
+    let
+        ( shuffled , nextSeed ) = shuffle freshDeck model.seed
+    in
+        { model | deck = model.deck ++ shuffled, seed = nextSeed }
+
+listUpdateAt : Int -> a -> List a -> List a
+listUpdateAt n value list =
+    list
+        |> List.indexedMap (\idx a -> if idx == n then value else a)
+
+
+
+----------
+-- VIEW --
+----------
+
+view : Model -> Html Msg
+view { hands, selected } =
+    let
+        cards =
+            zip2 hands selected
+                |> List.indexedMap cardView
+    in
+        div []
+            [ div [ Attr.class "card-list" ] cards
+            , button [ onClick Discard ] [ text "すてる" ]
+            ]
+
+cardView : Int -> ( Card, Bool ) -> Html Msg
+cardView n ( (Card suit rank), selected ) =
+    let
+        id = suitToClass suit ++ String.fromInt rank
+
+        center =
+            [ span [ Attr.class "suit" ]
+                [ span [ Attr.class <| suitToClass suit ] [ text <| suitToString suit ]
+                ]
+            , span [ Attr.class "rank" ] [ text <| String.fromInt rank ]
+            ]
+
+        card = 
+            ( id
+            , label [ Attr.class "card" ]
+                [ input
+                    [ Attr.type_ "checkbox"
+                    , Attr.checked selected
+                    , onCheck <| Select n
+                    ] []
+                , div [ Attr.class "card-center" ] center
+                ]
+            )
+    in
+        Keyed.node "div" [ Attr.class "card-slot" ] [ card ]
+
+suitToClass suit =
+    case suit of
+        Spade -> "spade"
+        Heart -> "heart"
+        Diamond -> "diamond"
+        Club -> "club"
+
+
+
+------------
+-- RANDOM --
+------------
+
+type alias Rand a = Seed -> ( a, Seed )
+type Seed = Seed Int
+
+next : Int -> Int
+next x =
+    let
+      y = x |> Bitwise.shiftLeftBy 13 |> Bitwise.xor x
+      z = y |> Bitwise.shiftRightBy 17 |> Bitwise.xor y
+    in
+      z |> Bitwise.shiftLeftBy 5 |> Bitwise.xor z
+
+constant : a -> Rand a
+constant value =
+    \seed -> ( value, seed )
+
+andThen : (a -> Rand b) -> Rand a -> Rand b
+andThen f rand =
+    \seed ->
+        let
+            ( a, nextSeed ) =
+                rand seed
+        in
+        f a nextSeed
+ 
+nextInt : Rand Int
+nextInt (Seed seed) =
+    let
+        seed_ = next seed
+    in
+        ( seed_, Seed seed_ )
+
+nextIntWithLimit : Int -> Rand Int
+nextIntWithLimit excl =
+    nextInt
+        |> andThen (\n ->  modBy excl n |> constant)
+
+shuffle : List a -> Rand (List a)
+shuffle list =
+    shuffleHelp list []
+
+shuffleHelp : List a -> List a -> Rand (List a)
+shuffleHelp rest result =
+    case rest of
+        [] ->
+            constant result
+        _ ->
+            nextIntWithLimit (List.length rest)
+                |> andThen (\idx ->
+                    case pick idx rest of
+                        Nothing ->  -- never happen
+                            \_ -> ( [], Seed 0 )
+                        Just ( x, xs ) ->
+                            shuffleHelp xs (x :: result)
+                )
+
+
+
+-------------
+-- UTILITY --
+-------------
+
+pick : Int -> List a -> Maybe ( a, List a )
+pick idx xs =
+    case ( idx, xs ) of
+        ( 0, x :: rest ) ->
+            Just ( x, rest )
+
+        ( _, x :: rest ) ->
+            pick (idx - 1) rest
+                |> Maybe.map (\( y, ys ) -> ( y, x :: ys ))
+
+        _ ->
+            Nothing
+
+zip2 : List a -> List b -> List ( a, b )
+zip2 =
+  List.map2 Tuple.pair
+
+zip3 : List a -> List b -> List c -> List ( a, b, c )
+zip3 listA listB listC =
+    List.map3 (\a b c -> ( a, b, c )) listA listB listC
+```
+:::
+
+## Rand aについてもう少し考える
+
+前回は`a`型の乱数値を得られる性質を表す型`Rand a`について学びました．
+今回はこの型とその信念をもう少し掘り下げましょう．
+
+### nextをそのまま
+
+まずは`Rand a`を使わないとき，前回のXorshift実装`next : Int -> Int`を直接取り扱うことを考えます．
+乱数を利用して，A, B, Cの組の型の値を得たいという想定にします．
+それぞれの値を得るのに必要な`Int`の数はそれぞれ1, 2, 3としましょう．
+64bitの値が欲しいので32bitの乱数2つを並べよう，というような設定です．
+（実装がXorshiftだと並べても何の解決にもなりませんが，今回はそこに目をつぶって）
+
+`seed1 : Int`と`Int`からA, B, Cを得るための関数`intToA : Int -> A`, `intToB : Int -> Int -> B`, `intToC : Int -> Int -> Int -> C`が与えられているとすると，以下のようなコードになるでしょう．
+
+**nextをそのまま使った乱数値取得コード**  
+```elm
+let
+    seed2 = next seed1
+    a = intToA seed2
+    seed3 = next seed2
+    seed4 = next seed3
+    b = intToB seed3 seed4
+    seed5 = next seed4
+    seed6 = next seed5
+    seed7 = next seed6
+    c = intToC seed5 seed6 seed7
+in
+    ( ( a, b, c ), seed7 )
+```
+
+これを毎回書くのは苦ですし，間違いなくseedを取り違えます．
+
+### Rand aを使う
+
+「Seedを与えたら乱数値と次のSeedの組を返す」という部分をまとめた型を作ると，すこしスッキリします．定義は，`type alias Rand a = Seed -> ( a, Seed )`です．
+
+**Randを使った乱数値取得コード**  
+```elm
+let
+    ( a, seed2 ) = nextA seed1
+    ( b, seed3 ) = nextB seed2
+    ( c, seed4 ) = nextC seed3
+in
+    ( ( a, b, c ), seed4 )
+```
+
+`nextA : Rand A` (`Seed -> ( A, Seed )`)という形に`A`の生成部分をまとめると，
+利用側は`Seed`の途中状態を管理しなくて良くなります．
+
+実は上記のコードも`seed1`を引数とすれば`Rand ( A, B, C )`型です．
+
+乱数値を生成する関数を全てこの形にすれば，機械的にseedを受け渡すだけで書くことができます．
+
+**Randの再帰的構造**
+```
+        ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+        ┃nextABC      a ────────────────────b ────────────────────c ──╂-( a, b, c )→
+        ┃   ┏━━━━━━━━┓↑          ┏━━━━━━━━┓↑          ┏━━━━━━━━┓↑  ┃
+- seed1 ╂→ ┃nextA   ┃┘        ┌→┃nextB   ┃┘        ┌→┃nextC   ┃┘   ┃
+        ┃   ┃        ┃- seed2  ┘  ┃        ┃- seed3  ┘  ┃        ┃────╂- seed4 ──→
+        ┃   ┗━━━━━━━━┛            ┗━━━━━━━━┛            ┗━━━━━━━━┛    ┃
+        ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+### andThenとconstant
+
+はじめよりは整理されましたが，頑張ってもう一段階まとめましょう．
+
+`Rand`型を作るとき，多くの場合は他の`Rand`型を利用します．
+
+`nextABC : Rand ( A, B, C )`では，`nextA : Rand A`, `nextB : Rand B`, `nextC : Rand C`の間で
+`Seed`を受け渡し，得られた`a`, `b`, `c`を組にします．
+
+**Randを使った乱数値取得コード（関数）**  
+```elm
+nextABC seed1 =
+    let
+        ( a, seed2 ) = nextA seed1
+        ( b, seed3 ) = nextB seed2
+        ( c, seed4 ) = nextC seed3
+    in
+        ( ( a, b, c ), seed4 )
+```
+
+受け渡し部分を関数にまとめたものが`andThen`です．
+以下のように`Seed`を束縛して次に渡す部分が`andThen`の内部に閉じ込められます．
+（とりさんはこれを裏配線と呼んでいます）
+
+**Randを使った乱数値取得コード（関数）**  
+```elm
+nextABC =
+    nextA |> andThen (\a -> 
+    nextB |> andThen (\b ->
+    nextC |> andThen (\c -> 
+        constant ( a, b, c )
+    )))
+```
+
+constantとandThenの実装が見たくなると思うので再掲します．
+
+**Rand constant, andThen（再掲）**
+```elm
+constant : a -> Rand a
+constant value =
+    \seed -> ( value, seed )
+
+andThen : (a -> Rand b) -> Rand a -> Rand b
+andThen f rand =
+    \seed ->
+        let
+            ( a, nextSeed ) =
+                rand seed
+        in
+        f a nextSeed
+```
+
+`andThen`は`a`と`nextSeed`を束縛して，引数の関数`f`に渡す役割です．
+
+`f`について考えるとき，`nextA |> andThen`のところを例にするとこんがらがるので，短い`nextC |> andThen`を考えます．書き下して変形します．
+
+**andThenの展開**
+
+```elm
+nextC |> andThen (\c -> constant ( a, b, c ))
+```
+↓パイプを計算
+```elm
+andThen (\c -> constant ( a, b, c )) nextC
+```
+↓andTnenを展開（aをcに，玉突きでcをc_に改名）
+```elm
+\seed ->
+    let
+        ( c, nextSeed ) = nextC seed
+    in
+        (\c_ -> constant ( a, b, c_ )) c nextSeed
+```
+↓constantを展開
+```elm
+\seed ->
+    let
+        ( c, nextSeed ) = nextC seed
+    in
+        (\c_ -> (\seed_ -> ( ( a, b, c_ ), seed_ ))) c nextSeed
+```
+↓ラムダ式に代入
+```elm
+\seed ->
+    let
+        ( c, nextSeed ) = nextC seed
+    in
+        \seed_ -> ( ( a, b, c ), seed_ )) nextSeed
+```
+↓ラムダ式に代入
+```elm
+\seed ->
+    let
+        ( c, nextSeed ) = nextC seed
+    in
+        ( ( a, b, c ), nextSeed )
+```
+
+[元のコード](#Randを使った乱数値取得コード（関数）)のseedの受け渡しとタプルにする部分が`andThen`に委ねられていることが確認できました．
+
+利用側では`andThen`の`f`部分を主に記述することになります．
+`f`は「乱数値aが得られたらそれを利用してBの乱数を得る方法(`Rand B`)」です．
+
+連鎖させることで，乱数の結果によって次の乱数の範囲を変えるような複雑な処理が書けます．
+逆に乱数を引かないときは`const : a -> Rand a`を使って，型を合せます．
+
+今回の例のように，結果の値で乱数を分岐せず，加工するだけの用途には，
+`map : (a -> b) -> Rand a -> Rand b`も用意しておくとより簡潔に書けます．
+
+**Rand mapも定義すると便利**
+```elm
+map : (a -> b) -> Rand a -> Rand b
+map f =
+    andThen (\a -> f a |> constant)
+
+map3 : (a -> b -> c -> d) -> Rand a -> Rand b -> Rand c -> Rand d
+map3 f x y z =
+    x |> andThen (\a ->
+    y |> andThen (\b ->
+    z |> andThen (\c -> f a b c |> constant)))
+
+nextABC =
+    map3 (\a b c -> ( a, b, c ))
+    nextA
+    nextB
+    nextC
+```
+
+こちらを使う方が簡潔ですが，純粋関数でフルスペックの乱数を紹介したかったので，`andThen`主体の構成にしました．
+
+:::coffee-break[do記法]
+
+`andThen`は乱数を純粋に扱う上で強力でしたが，
+ラムダ式のネストはインデントを無視しないと読み辛い見た目です．
+
+```elm
+nextABC =
+    nextA |> andThen (\a -> 
+    nextB |> andThen (\b ->
+    nextC |> andThen (\c -> 
+        constant ( a, b, c )
+    )))
+```
+
+Haskellはこの問題への対処として，do記法を採用しています．
+
+```haskell
+nextABC = do
+    a <- nextA
+    b <- nextB
+    c <- nextC
+    pure (a, b, c)
+```
+
+doはMonadのための糖衣構文で，やっていることは`andThen`と一緒です．
+
+```haskell
+do
+    x <- mx
+    rest
+```
+↓
+```haskell
+mx >>= \x -> do
+    rest
+```
+
+`>>=`は`andThen`に当たる演算子です．
+
+純粋関数型言語であることを維持したまま副作用を扱おうとしてMonadを導入，合成を行うコードの見た目を改善するdo記法を導入，
+その結果見た目が手続き型に戻ってきたのは面白いことです．
+
+ちなみにmap版も，より簡潔に
+
+```haskell
+nextABC = (,,) <$> nextA <*> nextB <*> nextC
+```
+
+と表せます．
+:::
+
+## seed設定画面
+
+ポーカーの開発に戻りましょう．
+
+シャッフルはできるようになりましたが，`seed = 42`で固定なため毎回同じ並びになってしまいます．
+これを緩和するために，最初にseedを設定する画面を作りましょう．
+（TEAには乱数を扱うもう少し便利な機能があるのですが，分かりやすいのでしばらくこのままいきます）
+
+### タイトル画面（仮）を作る
+
+まずは雑にseedの入力欄を作ります．
+
+```elm
+view _ =
+    div []
+        [ h1 [] [ text "ポーカー" ]
+        , div []
+            [ input [ Attr.type_ "number" ] []
+            , button [] [ text "seed決定" ]
+            ]
+        ]
+
+--view : Model -> Html Msg
+--view { hands, selected } =
+--    let
+--        cards =
+--            zip2 hands selected
+--                |> List.indexedMap cardView
+--    in
+--        div []
+--            [ div [ Attr.class "card-list" ] cards
+--            , button [ onClick Discard ] [ text "すてる" ]
+--            ]
+```
+
+`Attr.type_ "number"`は数値入力用のインターフェースになります．
+（Androidだとソフトキーボードが変わる専用のものになるかも）
+
+見た目が良さそうなら（良いこととする），表示用の値とこれを`titleView`，今までのものを`cardSelectView`と改名し，
+`view`で分岐することにします．
+
+```elm
+view : Model -> Html Msg
+view model =  -- 画面の振り分け
+    if model.seed == 0 then  -- seedが0だと現状の乱数は機能しない
+        titleView model
+    else
+        cardSelectView model
+
+titleView _ =
+    div []
+        [ h1 [] [ text "ポーカー" ]
+        , div []
+            [ input [ Attr.type_ "number" ] []
+            , button [] [ text "seed決定" ]
+            ]
+        ]
+
+cardSelectView : Model -> Html Msg
+cardSelectView { hands, selected } =
+    let
+        cards =
+            zip2 hands selected
+                |> List.indexedMap cardView
+    in
+        div []
+            [ div [ Attr.class "card-list" ] cards
+            , button [ onClick Discard ] [ text "すてる" ]
+            ]
+```
+
+### inputから数字を取得
+
+inputから数字を取得するには，[XorshiftのElm実装](#XorshiftのElm実装)にあったような，文字列が更新されたときのEventを利用します．
+
+`view`は`input`と`button`にそれぞれ`Msg`（まだ作っていない）を割り当てます．
+
+```elm
+...
+import Html.Events exposing (onCheck, onClick, onInput)
+...
+
+titleView _ =
+    div []
+        [ h1 [] [ text "ポーカー" ]
+        , div []
+            [ input [ Attr.type_ "number", onInput UpdateSeed ] []  -- 入力欄
+            , button [ onClick SetSeed ] [ text "seed決定" ]  -- 決定ボタン
+            ]
+        ]
+```
+
+`UpdateSeed`と`SetSeed`の`Msg`を追加します．
+`onInput : (String -> msg) -> Attribute msg`の`String`のことを忘れずに．
+
+```elm
+type Msg
+    = UpdateSeed String  -- 入力欄が更新されたとき
+    | SetSeed  -- 決定ボタンが押されたとき
+    | Select Int Bool
+    | Discard
+```
+
+それぞれの`Msg`に対する`update`のcaseを追加します．
+入力欄の入力中の文字はまだ`Model`に無いですが，`seedString : Stirng`を追加する予定で作ります．
+
+また，山札はseedが決定したときに補充するようにします．
+
+```elm
+update : Msg -> Model -> Model
+update msg model =
+    case msg of
+        UpdateSeed str ->  -- 入力欄の更新
+            { model | seedString = str }
+
+        SetSeed ->  -- seed決定
+            case String.toInt model.seedString of
+                Nothing ->  -- 無効な入力
+                    model
+
+                Just seed ->  -- 有効な入力
+                    let
+                        seed_ = Seed seed
+                        ( shuffled, nextSeed ) = shuffle freshDeck seed_
+                    in
+                        { model
+                        | deck = shuffled |> List.drop 5
+                        , hands = shuffled |> List.take 5
+                        , seed = nextSeed
+                        }
+    ...
+```
+
+最後に`Model`に`seedString : Stirng`を追加します．
+
+```elm
+type alias Model =
+    { deck : List Card
+    , hands : List Card
+    , selected : List Bool
+    , seedString : String  -- seed入力欄の文字列
+    , seed : Seed
+    }
+
+...
+
+initialModel : Model
+initialModel =  -- とりあえず入れておく初期値
+    { deck = []
+    , hands = []
+    , selected = List.repeat 5 False
+    , seedString = ""
+    , seed = Seed 0
+    }
+```
+
+:::details[seed設定までの.elm]
+```elm
+module Main exposing (main)
+
+import Bitwise
+import Browser
+import Html exposing (..)
+import Html.Attributes as Attr
+import Html.Events exposing (onCheck, onClick, onInput)
+import Html.Keyed as Keyed
+
+
+main =
+    Browser.sandbox
+        { init = initialModel
+        , view = view
+        , update = update
+        }
+
+
+
+-----------
+-- MODEL --
+-----------
+
+type alias Model =
+    { deck : List Card
+    , hands : List Card
+    , selected : List Bool
+    , seedString : String
+    , seed : Seed
+    }
+
+type Card = Card Suit Rank
+
+type Suit
+    = Spade
+    | Heart
+    | Diamond
+    | Club
+
+suitToString suit =
+    case suit of
+        Spade -> "♠"
+        Heart -> "♥"
+        Diamond -> "♦"
+        Club -> "♣"
+
+type alias Rank = Int
+
+initialModel : Model
+initialModel =
+    { deck = []
+    , hands = []
+    , selected = List.repeat 5 False
+    , seedString = ""
+    , seed = Seed 0
+    }
+
+freshDeck : List Card
+freshDeck =
+    [ Spade, Heart, Diamond, Club ]
+        |> List.concatMap (\suit ->
+            List.range 1 13
+                |> List.map (\rank -> Card suit rank)
+        )
+
+
+
+------------
+-- UPDATE --
+------------
+
+type Msg
+    = UpdateSeed String
+    | SetSeed
+    | Select Int Bool
+    | Discard
+
+update : Msg -> Model -> Model
+update msg model =
+    case msg of
+        UpdateSeed str ->
+            { model | seedString = str }
+
+        SetSeed ->
+            case String.toInt model.seedString of
+                Nothing ->
+                    model
+
+                Just seed ->
+                    let
+                        seed_ = Seed seed
+                        ( shuffled, nextSeed ) = shuffle freshDeck seed_
+                    in
+                        { model
+                        | deck = shuffled |> List.drop 5
+                        , hands = shuffled |> List.take 5
+                        , seed = nextSeed
+                        }
+        Select n value ->
+            let
+                newSelected = 
+                    model.selected
+                        |> listUpdateAt n value
+            in
+                { model | selected = newSelected }
+
+        Discard ->
+            let
+                drawNum =
+                    model.selected
+                        |> List.filter identity
+                        |> List.length
+                
+                model_ =
+                    if drawNum > List.length model.deck then
+                        refill model
+                    else
+                        model
+                
+                ( newHands, newDeck ) = draw (zip2 model_.hands model_.selected) model_.deck
+            in
+                { model_ | deck = newDeck, hands = newHands, selected = List.repeat 5 False }
+
+draw : List ( Card, Bool ) -> List Card -> ( List Card, List Card )
+draw hands deck =
+    drawHelp hands deck []
+
+drawHelp : List ( Card, Bool ) -> List Card -> List Card -> ( List Card, List Card )
+drawHelp hands deck result =
+    case hands of
+        [] ->  -- 処理すべき残り手札無し
+            ( result |> List.reverse, deck )
+
+        ( card, False ) :: rest ->  -- この手札は選択されていない
+            drawHelp rest deck (card :: result)
+
+        ( _, True ) :: rest ->  -- この手札は選択されている
+            drawHelp rest (List.drop 1 deck) (List.take 1 deck ++ result)
+
+refill : Model -> Model
+refill model =
+    let
+        ( shuffled , nextSeed ) = shuffle freshDeck model.seed
+    in
+        { model | deck = model.deck ++ shuffled, seed = nextSeed }
+
+listUpdateAt : Int -> a -> List a -> List a
+listUpdateAt n value list =
+    list
+        |> List.indexedMap (\idx a -> if idx == n then value else a)
+
+
+
+----------
+-- VIEW --
+----------
+
+view : Model -> Html Msg
+view model =
+    if model.seed == Seed 0 then
+        titleView model
+    else
+        cardSelectView model
+
+titleView _ =
+    div []
+        [ h1 [] [ text "ポーカー" ]
+        , div []
+            [ input [ Attr.type_ "number", onInput UpdateSeed ] []
+            , button [ onClick SetSeed ] [ text "seed決定" ]
+            ]
+        ]
+
+cardSelectView : Model -> Html Msg
+cardSelectView { hands, selected } =
+    let
+        cards =
+            zip2 hands selected
+                |> List.indexedMap cardView
+    in
+        div []
+            [ div [ Attr.class "card-list" ] cards
+            , button [ onClick Discard ] [ text "すてる" ]
+            ]
+
+cardView : Int -> ( Card, Bool ) -> Html Msg
+cardView n ( (Card suit rank), selected ) =
+    let
+        id = suitToClass suit ++ String.fromInt rank
+
+        center =
+            [ span [ Attr.class "suit" ]
+                [ span [ Attr.class <| suitToClass suit ] [ text <| suitToString suit ]
+                ]
+            , span [ Attr.class "rank" ] [ text <| String.fromInt rank ]
+            ]
+
+        card = 
+            ( id
+            , label [ Attr.class "card" ]
+                [ input
+                    [ Attr.type_ "checkbox"
+                    , Attr.checked selected
+                    , onCheck <| Select n
+                    ] []
+                , div [ Attr.class "card-center" ] center
+                ]
+            )
+    in
+        Keyed.node "div" [ Attr.class "card-slot" ] [ card ]
+
+suitToClass suit =
+    case suit of
+        Spade -> "spade"
+        Heart -> "heart"
+        Diamond -> "diamond"
+        Club -> "club"
+
+
+
+------------
+-- RANDOM --
+------------
+
+type alias Rand a = Seed -> ( a, Seed )
+type Seed = Seed Int
+
+next : Int -> Int
+next x =
+    let
+      y = x |> Bitwise.shiftLeftBy 13 |> Bitwise.xor x
+      z = y |> Bitwise.shiftRightBy 17 |> Bitwise.xor y
+    in
+      z |> Bitwise.shiftLeftBy 5 |> Bitwise.xor z
+
+constant : a -> Rand a
+constant value =
+    \seed -> ( value, seed )
+
+andThen : (a -> Rand b) -> Rand a -> Rand b
+andThen f rand =
+    \seed ->
+        let
+            ( a, nextSeed ) =
+                rand seed
+        in
+        f a nextSeed
+ 
+nextInt : Rand Int
+nextInt (Seed seed) =
+    let
+        seed_ = next seed
+    in
+        ( seed_, Seed seed_ )
+
+nextIntWithLimit : Int -> Rand Int
+nextIntWithLimit excl =
+    nextInt
+        |> andThen (\n ->  modBy excl n |> constant)
+
+shuffle : List a -> Rand (List a)
+shuffle list =
+    shuffleHelp list []
+
+shuffleHelp : List a -> List a -> Rand (List a)
+shuffleHelp rest result =
+    case rest of
+        [] ->
+            constant result
+        _ ->
+            nextIntWithLimit (List.length rest)
+                |> andThen (\idx ->
+                    case pick idx rest of
+                        Nothing ->  -- never happen
+                            \_ -> ( [], Seed 0 )
+                        Just ( x, xs ) ->
+                            shuffleHelp xs (x :: result)
+                )
+
+
+
+-------------
+-- UTILITY --
+-------------
+
+pick : Int -> List a -> Maybe ( a, List a )
+pick idx xs =
+    case ( idx, xs ) of
+        ( 0, x :: rest ) ->
+            Just ( x, rest )
+
+        ( _, x :: rest ) ->
+            pick (idx - 1) rest
+                |> Maybe.map (\( y, ys ) -> ( y, x :: ys ))
+
+        _ ->
+            Nothing
+
+zip2 : List a -> List b -> List ( a, b )
+zip2 =
+  List.map2 Tuple.pair
+
+zip3 : List a -> List b -> List c -> List ( a, b, c )
+zip3 listA listB listC =
+    List.map3 (\a b c -> ( a, b, c )) listA listB listC
+```
+:::

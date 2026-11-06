@@ -565,6 +565,7 @@ async function convertPage(page) {
 <html>
 <head>
   <meta charset="utf-8">
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+1+Code:wght@400;700&display=swap" rel="stylesheet">
   <style>
 ${githubCss}
 ${modCss}
